@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<title>Tour Editor — Árvore</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --brand:#1A4B5A;--accent:#7DD4B8;--accent2:#5DCAA5;
+  --bg:#0d1f27;--panel:#132330;--panel2:#1a2f3d;
+  --border:rgba(125,212,184,0.15);--text:#e8f4f0;--muted:rgba(232,244,240,0.45);
+  --danger:#f87171;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── UPLOAD SCREEN ─────────────────────────────── */
+#upload-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;z-index:200}
+.up-logo{font-size:22px;font-weight:700;color:#fff}.up-logo span{color:var(--accent)}
+.up-subtitle{font-size:13px;color:var(--muted);margin-top:-16px}
+.drop-zone{width:460px;border:2px dashed rgba(125,212,184,0.3);border-radius:14px;padding:48px 36px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(125,212,184,0.02);position:relative}
+.drop-zone:hover,.drop-zone.over{border-color:var(--accent);background:rgba(125,212,184,0.06)}
+.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-icon{font-size:40px;display:block;margin-bottom:12px}
+.drop-title{font-size:16px;font-weight:600;color:#fff;margin-bottom:6px}
+.drop-sub{font-size:12px;color:var(--muted);line-height:1.7}.drop-sub b{color:var(--accent)}
+.up-tip{font-size:11px;color:var(--muted);max-width:380px;text-align:center;line-height:1.8}
+.up-tip b{color:var(--accent)}
+
+/* ── TOPBAR ─────────────────────────────────────── */
+.topbar{background:var(--brand);height:48px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-bottom:1px solid var(--border)}
+.tl-left{display:flex;align-items:center;gap:12px}
+.logo{font-weight:700;font-size:14px;color:#fff}.logo span{color:var(--accent)}
+.tabs{display:flex;background:rgba(0,0,0,0.25);border-radius:8px;padding:3px}
+.tab{padding:5px 13px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;color:rgba(255,255,255,0.5);border:none;background:none;transition:all .15s;font-family:inherit}
+.tab.active{background:var(--accent);color:var(--brand)}
+.tl-right{display:flex;align-items:center;gap:7px}
+.btn{padding:6px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none;transition:all .15s;font-family:inherit}
+.btn-g{background:rgba(125,212,184,0.1);color:var(--accent);border:1px solid var(--border)}.btn-g:hover{background:rgba(125,212,184,0.2)}
+.btn-p{background:var(--accent);color:var(--brand)}.btn-p:hover{background:var(--accent2)}
+.btn-d{background:rgba(248,113,113,0.1);color:var(--danger);border:1px solid rgba(248,113,113,0.2)}.btn-d:hover{background:rgba(248,113,113,0.2)}
+.btn:disabled{opacity:.3;cursor:default}
+
+/* ── LAYOUT ─────────────────────────────────────── */
+.layout{display:flex;flex:1;overflow:hidden}
+
+/* ── LEFT SIDEBAR: telas ────────────────────────── */
+.sidebar-screens{width:180px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sb-head{padding:10px 12px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
+.sb-head h2{font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.07em}
+.sb-head .icon-btn{background:none;border:none;color:var(--accent);cursor:pointer;font-size:16px;line-height:1;padding:0 2px}
+.sb-head .icon-btn:hover{color:#fff}
+.screen-list{flex:1;overflow-y:auto;padding:8px}
+.screen-thumb{border-radius:7px;margin-bottom:8px;cursor:pointer;border:2px solid transparent;transition:all .15s;overflow:hidden;background:#111;position:relative}
+.screen-thumb:hover{border-color:rgba(125,212,184,0.3)}
+.screen-thumb.active{border-color:var(--accent)}
+.screen-thumb img{width:100%;display:block;opacity:0.85}
+.screen-thumb-label{position:absolute;bottom:0;left:0;right:0;background:rgba(13,31,39,0.85);font-size:10px;font-weight:600;padding:4px 7px;color:rgba(255,255,255,0.8);display:flex;align-items:center;justify-content:space-between}
+.screen-thumb-label .sdel{opacity:0;background:none;border:none;color:var(--danger);cursor:pointer;font-size:11px;line-height:1;padding:0}
+.screen-thumb:hover .sdel{opacity:1}
+.screen-thumb.active .screen-thumb-label{color:#fff}
+
+/* ── MIDDLE: passos ─────────────────────────────── */
+.sidebar-steps{width:190px;flex-shrink:0;background:var(--panel2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.steps-list{flex:1;overflow-y:auto;padding:8px}
+.step-item{display:flex;align-items:center;gap:7px;padding:8px 9px;border-radius:7px;cursor:pointer;border:1px solid transparent;margin-bottom:3px;transition:all .15s}
+.step-item:hover{background:rgba(255,255,255,0.04)}
+.step-item.active{background:rgba(125,212,184,0.1);border-color:rgba(125,212,184,0.25)}
+.snum{width:20px;height:20px;border-radius:50%;background:var(--brand);color:var(--accent);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.step-item.active .snum{background:var(--accent);color:var(--brand)}
+.slabel{font-size:12px;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.sdel2{opacity:0;width:18px;height:18px;border-radius:4px;background:rgba(248,113,113,0.1);color:var(--danger);border:none;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.step-item:hover .sdel2{opacity:1}
+.sb-foot{padding:9px;border-top:1px solid var(--border);flex-shrink:0}
+
+/* ── CANVAS ─────────────────────────────────────── */
+.main{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:20px;background:var(--bg)}
+.canvas-wrap{position:relative;width:960px;height:600px;flex-shrink:0;background:#111;border-radius:10px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.5)}
+.canvas-wrap img{width:960px;height:600px;display:block;pointer-events:none;user-select:none}
+#draw-rect{position:absolute;border:2px dashed var(--accent);background:rgba(125,212,184,0.07);pointer-events:none;display:none;z-index:50}
+.clabel{position:absolute;top:10px;left:10px;background:var(--brand);color:var(--accent);font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid var(--border);z-index:30;pointer-events:none}
+.hint-bar{position:absolute;bottom:0;left:0;right:0;background:rgba(13,31,39,0.8);padding:7px 14px;font-size:11px;color:var(--muted);text-align:center;z-index:30;pointer-events:none}
+.hint-bar b{color:var(--accent)}
+.no-steps-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;z-index:5;pointer-events:none}
+.no-steps-msg p{font-size:13px;color:var(--muted)}
+
+/* ── HIGHLIGHT ──────────────────────────────────── */
+.hl-box{position:absolute;border:2.5px solid var(--accent);border-radius:6px;z-index:10;box-shadow:0 0 0 3000px rgba(0,0,0,0.45)}
+.hl-box.editable{cursor:move}
+.hl-box.pulse{animation:hlpulse 2s ease-in-out infinite}
+@keyframes hlpulse{0%,100%{box-shadow:0 0 0 3000px rgba(0,0,0,0.45),0 0 0 3px rgba(125,212,184,0.3)}50%{box-shadow:0 0 0 3000px rgba(0,0,0,0.45),0 0 0 8px rgba(125,212,184,0.08)}}
+.rh{position:absolute;width:10px;height:10px;background:var(--accent);border:2px solid var(--brand);border-radius:2px;z-index:12}
+.rh.tl{top:-5px;left:-5px;cursor:nwse-resize}
+.rh.tr{top:-5px;right:-5px;cursor:nesw-resize}
+.rh.bl{bottom:-5px;left:-5px;cursor:nesw-resize}
+.rh.br{bottom:-5px;right:-5px;cursor:nwse-resize}
+
+/* ── TOOLTIP BUBBLE ─────────────────────────────── */
+.tip-bubble{position:absolute;background:var(--brand);border:1px solid rgba(125,212,184,0.35);border-radius:10px;padding:11px 13px;z-index:20;min-width:150px;box-shadow:0 4px 20px rgba(0,0,0,0.4);pointer-events:none;word-wrap:break-word;overflow-wrap:break-word;word-break:normal}
+.tip-bubble strong{display:block;font-size:12px;font-weight:700;color:#fff;margin-bottom:3px;white-space:normal}
+.tip-bubble p{font-size:11px;color:rgba(255,255,255,0.82);line-height:1.55;white-space:normal}
+.tip-bubble::before{content:'';position:absolute;border:8px solid transparent}
+.tip-bubble.dir-above::before{bottom:-16px;left:18px;border-top-color:var(--brand)}
+.tip-bubble.dir-below::before{top:-16px;left:18px;border-bottom-color:var(--brand)}
+.tip-bubble.dir-left::before {right:-16px;top:14px;border-left-color:var(--brand)}
+.tip-bubble.dir-right::before{left:-16px;top:14px;border-right-color:var(--brand)}
+
+/* ── RIGHT PANEL ────────────────────────────────── */
+.rpanel{width:240px;flex-shrink:0;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+.rp-sec{padding:13px;border-bottom:1px solid var(--border)}
+.rp-sec h3{font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.07em;margin-bottom:9px}
+label{font-size:11px;color:var(--muted);display:block;margin-bottom:4px}
+input[type=text],textarea{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;font-family:inherit;outline:none;transition:border-color .15s}
+input[type=text]:focus,textarea:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:68px;line-height:1.5}
+.dir-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:4px}
+.dir-btn{padding:7px;border-radius:6px;font-size:15px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);cursor:pointer;text-align:center;transition:all .15s;line-height:1}
+.dir-btn:hover{border-color:var(--accent);color:var(--accent)}
+.dir-btn.active{background:rgba(125,212,184,0.15);border-color:var(--accent);color:var(--accent)}
+.dir-center{background:none;border:none;color:rgba(255,255,255,0.1);font-size:12px;display:flex;align-items:center;justify-content:center}
+.coord-box{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);background:var(--panel2);border-radius:6px;padding:7px;line-height:2}
+.coord-box span{color:var(--accent)}
+
+/* ── STATUSBAR ──────────────────────────────────── */
+.statusbar{height:27px;background:var(--brand);display:flex;align-items:center;padding:0 14px;gap:14px;flex-shrink:0;border-top:1px solid var(--border)}
+.s-chip{font-size:11px;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:5px}
+.s-dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+
+/* ── TOUR MODE ──────────────────────────────────── */
+.tour-nav{display:flex;align-items:center;justify-content:space-between;width:100%}
+#tour-nav-bar{width:960px;background:#1A4B5A;border-radius:0 0 10px 10px;padding:11px 18px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(125,212,184,0.2);box-shadow:0 6px 20px rgba(0,0,0,0.3)}
+.t-dots{display:flex;gap:6px;flex-wrap:wrap;max-width:300px;justify-content:center}
+.t-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,0.2);cursor:pointer;transition:all .25s}
+.t-dot.active{background:var(--accent);transform:scale(1.3)}
+.tbtn{padding:7px 16px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:all .15s}
+.tbtn-p{background:rgba(125,212,184,0.1);color:var(--accent);border:1px solid var(--border)}.tbtn-p:hover{background:rgba(125,212,184,0.2)}
+.tbtn-n{background:var(--accent);color:var(--brand)}.tbtn-n:hover{background:var(--accent2)}
+.tbtn:disabled{opacity:.25;cursor:default}
+
+/* ── OVERLAY ────────────────────────────────────── */
+.overlay{position:absolute;inset:0;background:rgba(13,31,39,0.9);display:flex;align-items:center;justify-content:center;z-index:50}
+.ov-inner{background:var(--panel);border-radius:14px;padding:30px 26px;max-width:320px;text-align:center;border:1px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,0.5)}
+.ov-badge{display:inline-block;background:rgba(125,212,184,0.15);color:var(--accent);font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;margin-bottom:11px;letter-spacing:.06em;text-transform:uppercase}
+.ov-title{font-size:19px;font-weight:700;color:#fff;margin-bottom:9px;line-height:1.3}
+.ov-desc{font-size:12px;color:rgba(255,255,255,0.7);line-height:1.65;margin-bottom:20px}
+.ov-btn{background:var(--accent);color:var(--brand);border:none;border-radius:8px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.ov-btn:hover{background:var(--accent2)}
+
+/* ── ANIMAÇÕES TOUR ─────────────────────────────── */
+@keyframes fadeSlideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.anim-in{animation:fadeSlideIn .3s ease forwards}
+.anim-fade{animation:fadeIn .25s ease forwards}
+.canvas-wrap img.crossfade{animation:fadeIn .35s ease}
+
+.hidden{display:none!important}
+
+/* ── BOTÃO IA ───────────────────────────────────── */
+.btn-gh{background:#24292f;color:#fff;border:1px solid rgba(255,255,255,0.15)}.btn-gh:hover{background:#3a4046}
+
+/* ── MODAL GITHUB ───────────────────────────────── */
+#gh-modal{position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:500;display:none;align-items:center;justify-content:center}
+#gh-modal.open{display:flex}
+.gh-box{background:var(--panel);border-radius:16px;width:480px;border:1px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.gh-head{padding:16px 20px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.gh-head h2{font-size:14px;font-weight:700;color:#fff}
+.gh-body{padding:20px;display:flex;flex-direction:column;gap:14px}
+.gh-field label{font-size:11px;color:var(--accent);font-weight:600;display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
+.gh-field input{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-size:12px;font-family:inherit;outline:none}
+.gh-field input:focus{border-color:var(--accent)}
+.gh-hint{font-size:11px;color:var(--muted);line-height:1.6;background:rgba(125,212,184,0.05);border-radius:7px;padding:9px 11px;border:1px solid var(--border)}
+.gh-hint a{color:var(--accent)}
+.gh-foot{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center}
+.gh-status{flex:1;font-size:11px;color:var(--muted);line-height:1.5}
+.gh-status.running{color:var(--accent)}
+.gh-status.ok{color:#4ade80}
+.gh-status.err{color:var(--danger)}
+.btn-publish{padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;font-family:inherit;background:#24292f;color:#fff;border:1px solid rgba(255,255,255,0.15)}
+.btn-publish:hover{background:#3a4046}
+.btn-publish:disabled{opacity:.4;cursor:default}
+
+/* ── MODAL IA ───────────────────────────────────── */
+#ai-modal{position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:500;display:none;align-items:center;justify-content:center}
+#ai-modal.open{display:flex}
+.ai-box{background:var(--panel);border-radius:16px;width:580px;max-height:90vh;overflow-y:auto;border:1px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.ai-head{padding:18px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.ai-head h2{font-size:15px;font-weight:700;color:#fff}
+.ai-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;line-height:1;padding:0}
+.ai-body{padding:20px}
+.ai-section{margin-bottom:18px}
+.ai-label{font-size:11px;color:var(--accent);font-weight:600;display:block;margin-bottom:7px;text-transform:uppercase;letter-spacing:.05em}
+.ai-drop{border:2px dashed rgba(125,212,184,0.3);border-radius:10px;padding:26px;text-align:center;cursor:pointer;transition:all .2s;position:relative;background:var(--panel2)}
+.ai-drop:hover,.ai-drop.over{border-color:var(--accent);background:rgba(125,212,184,0.06)}
+.ai-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.ai-drop-icon{font-size:26px;display:block;margin-bottom:7px}
+.ai-drop-title{font-size:13px;color:rgba(255,255,255,.6)}
+#ai-preview{width:100%;border-radius:8px;display:none;margin-top:10px;max-height:160px;object-fit:cover}
+.ai-prompt{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:12px;font-family:inherit;outline:none;resize:vertical;min-height:85px;line-height:1.6}
+.ai-prompt:focus{border-color:var(--accent)}
+.ai-count-row{display:flex;align-items:center;gap:10px}
+.ai-count-row span{font-size:12px;color:var(--accent);font-weight:700;min-width:22px;text-align:center}
+.ai-foot{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center}
+.ai-status{flex:1;font-size:11px;color:var(--muted);line-height:1.5}
+.ai-status.running{color:var(--accent)}
+.ai-status.err{color:var(--danger)}
+.btn-run{padding:9px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;font-family:inherit;background:linear-gradient(135deg,#7DD4B8,#4a9eff);color:#0d1f27}
+.btn-run:disabled{opacity:.4;cursor:default}
+.ai-results{margin-top:14px;display:none}
+.ai-result-item{background:var(--panel2);border-radius:8px;padding:10px 12px;margin-bottom:7px;border:1px solid var(--border);display:flex;align-items:flex-start;gap:9px}
+.air-num{background:var(--accent);color:var(--brand);border-radius:50%;width:20px;height:20px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.air-text strong{display:block;font-size:12px;color:#fff;margin-bottom:2px}
+.air-text p{font-size:11px;color:var(--muted);line-height:1.5}
+.btn-apply{width:100%;padding:10px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;font-family:inherit;background:var(--accent);color:var(--brand);margin-top:6px}
+.btn-apply:hover{background:var(--accent2)}
+</style>
+</head>
+<body>
+
+<!-- UPLOAD SCREEN -->
+<div id="upload-screen">
+  <div class="up-logo">Árvore<span>·</span> Tour Editor</div>
+  <div class="up-subtitle">Crie tours interativos da sua plataforma</div>
+  <div class="drop-zone" id="drop-zone">
+    <input type="file" accept="image/*" id="file-input"/>
+    <span class="drop-icon">🖼️</span>
+    <div class="drop-title">Arraste a imagem aqui</div>
+    <div class="drop-sub">ou clique para selecionar<br><b>PNG, JPG, WebP</b> — recomendado 1440×900</div>
+  </div>
+  <div class="up-tip">
+    Tire prints via Chrome DevTools: F12 → Ctrl+Shift+M → 1440×900<br>
+    Ctrl+Shift+P → <b>Capture screenshot</b>
+  </div>
+</div>
+
+<!-- EDITOR -->
+<div id="editor-wrap" style="display:none;flex-direction:column;height:100vh">
+
+<div class="topbar">
+  <div class="tl-left">
+    <div class="logo">Árvore<span>·</span> Tour</div>
+    <div class="tabs">
+      <button class="tab active" id="tab-edit" onclick="setMode('edit')">✏️ Editor</button>
+      <button class="tab" id="tab-tour" onclick="setMode('tour')">▶ Tour</button>
+    </div>
+  </div>
+  <div class="tl-right">
+    <button class="btn btn-g" onclick="openUploadForNew()">+ Nova tela</button>
+    <button class="btn btn-ai" onclick="openAI()">✨ Gerar com IA</button>
+    <button class="btn btn-p" onclick="exportTour()">⬇ Baixar HTML</button>
+    <button class="btn btn-gh" onclick="openGithubPublish()">🚀 Publicar no GitHub</button>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- Telas (sidebar esquerda) -->
+  <div class="sidebar-screens" id="sidebar-screens">
+    <div class="sb-head">
+      <h2>Telas</h2>
+      <button class="icon-btn" onclick="openUploadForNew()" title="Nova tela">＋</button>
+    </div>
+    <div class="screen-list" id="screen-list"></div>
+  </div>
+
+  <!-- Passos (sidebar meio) -->
+  <div class="sidebar-steps" id="sidebar-steps">
+    <div class="sb-head"><h2>Passos</h2></div>
+    <div class="steps-list" id="steps-list"></div>
+    <div class="sb-foot">
+      <button class="btn btn-p" style="width:100%" onclick="addStep()">+ Novo passo</button>
+    </div>
+  </div>
+
+  <!-- Canvas -->
+  <div class="main" id="main-area">
+    <div id="tour-container" style="display:flex;flex-direction:column;align-items:center;gap:0">
+      <div class="canvas-wrap" id="canvas-wrap">
+        <img id="canvas-img" src="" draggable="false"/>
+        <div id="draw-rect"></div>
+        <div class="clabel" id="clabel">Passo 1</div>
+        <div class="hint-bar" id="hint-bar">Arraste na imagem para <b>criar um destaque</b></div>
+      </div>
+      <div id="tour-nav-bar" class="hidden"></div>
+    </div>
+  </div>
+
+  <!-- Painel direito -->
+  <div class="rpanel" id="rpanel">
+    <div class="rp-sec">
+      <h3>Destaque</h3>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:9px">Arraste para mover · Cantos para redimensionar</p>
+      <div class="coord-box" id="coord-box">—</div>
+    </div>
+    <div class="rp-sec">
+      <h3>Posição do balão</h3>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:7px">Seta aponta para o destaque</p>
+      <div class="dir-grid">
+        <div></div>
+        <button class="dir-btn" data-dir="above" onclick="setDir('above')" title="Balão acima">↑</button>
+        <div></div>
+        <button class="dir-btn" data-dir="left"  onclick="setDir('left')"  title="Balão à esquerda">←</button>
+        <div class="dir-center">✛</div>
+        <button class="dir-btn" data-dir="right" onclick="setDir('right')" title="Balão à direita">→</button>
+        <div></div>
+        <button class="dir-btn" data-dir="below" onclick="setDir('below')" title="Balão abaixo">↓</button>
+        <div></div>
+      </div>
+    </div>
+    <div class="rp-sec">
+      <h3>Texto</h3>
+      <label>Título</label>
+      <input type="text" id="inp-title" placeholder="Ex: Menu de navegação" oninput="updateText()"/>
+      <div style="height:7px"></div>
+      <label>Descrição</label>
+      <textarea id="inp-text" placeholder="O que essa área faz..." oninput="updateText()"></textarea>
+    </div>
+    <div class="rp-sec">
+      <h3>Ações</h3>
+      <button class="btn btn-d" style="width:100%" onclick="deleteStep()">🗑 Remover passo</button>
+    </div>
+  </div>
+
+</div><!-- /layout -->
+
+<div class="statusbar">
+  <div class="s-chip"><div class="s-dot"></div><span id="status-txt">Pronto</span></div>
+  <div class="s-chip" id="status-hint">Selecione uma tela e arraste para criar um destaque</div>
+</div>
+
+</div><!-- /editor-wrap -->
+
+<!-- Upload extra (nova tela) — input oculto -->
+<input type="file" accept="image/*" id="file-input-extra" style="display:none"/>
+
+<!-- MODAL GITHUB -->
+<div id="gh-modal">
+  <div class="gh-box">
+    <div class="gh-head">
+      <h2>🚀 Publicar no GitHub</h2>
+      <button class="ai-close" onclick="closeGithub()">✕</button>
+    </div>
+    <div class="gh-body">
+      <div class="gh-field">
+        <label>Nome do arquivo</label>
+        <input type="text" id="gh-filename" placeholder="ex: tour-home" oninput="updateGhPreview()"/>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">Será publicado como <span id="gh-preview" style="color:var(--accent)">—</span></div>
+      </div>
+      <div class="gh-field">
+        <label>Repositório</label>
+        <input type="text" id="gh-repo" placeholder="usuario/arvore-tours"/>
+      </div>
+      <div class="gh-field">
+        <label>Token do GitHub</label>
+        <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxx"/>
+      </div>
+      <div class="gh-hint">
+        Gere um token em <a href="https://github.com/settings/tokens/new" target="_blank">github.com/settings/tokens</a> com permissão <b>repo</b>. O token é salvo no seu browser e não sai daqui.
+      </div>
+    </div>
+    <div class="gh-foot">
+      <div class="gh-status" id="gh-status">Preencha os campos e clique em Publicar.</div>
+      <button class="btn-publish" id="btn-publish" onclick="publishToGithub()">🚀 Publicar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL IA -->
+<div id="ai-modal">
+  <div class="ai-box">
+    <div class="ai-head">
+      <h2>✨ Gerar tour com IA</h2>
+      <button class="ai-close" onclick="closeAI()">✕</button>
+    </div>
+    <div class="ai-body">
+      <div class="ai-section">
+        <span class="ai-label">1. Imagem da tela</span>
+        <div class="ai-drop" id="ai-drop">
+          <input type="file" accept="image/*" id="ai-file"/>
+          <span class="ai-drop-icon">🖼️</span>
+          <div class="ai-drop-title">Arraste ou clique para selecionar</div>
+        </div>
+        <div id="ai-preview-wrap" style="display:none;position:relative">
+          <img id="ai-preview" src="" alt="preview" style="width:100%;border-radius:8px;display:block;max-height:160px;object-fit:cover"/>
+          <button onclick="resetAIImage()" style="position:absolute;top:7px;right:7px;background:rgba(13,31,39,0.8);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer;font-family:inherit">Trocar</button>
+        </div>
+      </div>
+      <div class="ai-section">
+        <span class="ai-label">2. Descreva o produto</span>
+        <textarea class="ai-prompt" id="ai-prompt" placeholder="Ex: Essa é a home da plataforma Árvore, que é um produto de leitura para escolas. Quero destacar o menu, a floresta gamificada, a liga de leitores, os livros recentes e o banner dos Semeadores de Leitura."></textarea>
+      </div>
+      <div class="ai-results" id="ai-results">
+        <span class="ai-label">Passos gerados</span>
+        <div id="ai-result-list"></div>
+        <button class="btn-apply" onclick="applyAISteps()">✓ Aplicar ao editor</button>
+      </div>
+    </div>
+    <div class="ai-foot">
+      <div class="ai-status" id="ai-status">Pronto para gerar.</div>
+      <button class="btn-run" id="btn-run" onclick="runAI()">✨ Gerar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Estado ────────────────────────────────────────
+// screens: [{ id, src, steps:[] }]
+// step: { title, text, hl:{top,left,width,height}, dir }
+let screens   = [];
+let curScreen = 0;
+let curStep   = 0;
+let appMode   = 'edit';
+let tourFlat  = []; // lista plana de {screenIdx, stepIdx} para navegação
+let tourPos   = -1;
+let drag      = null;
+const CW = 960, CH = 600;
+
+// ── Upload ────────────────────────────────────────
+const dropZone  = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const fileExtra = document.getElementById('file-input-extra');
+
+dropZone.addEventListener('dragover',  e=>{e.preventDefault();dropZone.classList.add('over')});
+dropZone.addEventListener('dragleave', ()=>dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e=>{
+  e.preventDefault(); dropZone.classList.remove('over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) loadFirstImage(f);
+});
+fileInput.addEventListener('change', e=>{ if(e.target.files[0]) loadFirstImage(e.target.files[0]); });
+fileExtra.addEventListener('change', e=>{ if(e.target.files[0]) addScreen(e.target.files[0]); fileExtra.value=''; });
+
+function loadFirstImage(file) {
+  const r = new FileReader();
+  r.onload = ev => {
+    screens = [{ id: uid(), src: ev.target.result, steps: [mkStep(1)] }];
+    curScreen = 0; curStep = 0;
+    document.getElementById('upload-screen').style.display = 'none';
+    const ew = document.getElementById('editor-wrap');
+    ew.style.display = 'flex';
+    ew.classList.remove('hidden');
+    renderAll();
+    setStatus('Tela adicionada. Arraste para criar o primeiro destaque.');
+  };
+  r.readAsDataURL(file);
+}
+
+function openUploadForNew() { fileExtra.click(); }
+
+function addScreen(file) {
+  const r = new FileReader();
+  r.onload = ev => {
+    screens.push({ id: uid(), src: ev.target.result, steps: [mkStep(1)] });
+    curScreen = screens.length - 1; curStep = 0;
+    renderAll();
+    setStatus('Nova tela adicionada.');
+  };
+  r.readAsDataURL(file);
+}
+
+function mkStep(n) {
+  return { title:'Passo '+n, text:'Descreva o que essa área faz.', hl:{top:10,left:10,width:35,height:10}, dir:'below' };
+}
+function uid() { return Math.random().toString(36).slice(2,8); }
+
+// ── Steps ─────────────────────────────────────────
+function addStep() {
+  const sc = screens[curScreen];
+  sc.steps.push(mkStep(sc.steps.length+1));
+  curStep = sc.steps.length - 1;
+  renderAll();
+  setStatus('Passo criado. Arraste na imagem para posicionar o destaque.');
+}
+
+function deleteStep() {
+  const sc = screens[curScreen];
+  if (sc.steps.length <= 1) { setStatus('Precisa ter ao menos 1 passo.'); return; }
+  sc.steps.splice(curStep, 1);
+  curStep = Math.max(0, curStep-1);
+  renderAll();
+}
+
+function deleteScreen(i) {
+  if (screens.length <= 1) { setStatus('Precisa ter ao menos 1 tela.'); return; }
+  screens.splice(i, 1);
+  curScreen = Math.max(0, curScreen-1);
+  curStep   = 0;
+  renderAll();
+}
+
+function selectScreen(i) { curScreen=i; curStep=0; renderAll(); }
+function selectStep(i)   { curStep=i; renderAll(); }
+
+// ── Render All ────────────────────────────────────
+function renderAll() {
+  renderScreenList();
+  renderStepList();
+  renderCanvas();
+  renderPanel();
+}
+
+// ── Screen list ───────────────────────────────────
+function renderScreenList() {
+  document.getElementById('screen-list').innerHTML = screens.map((sc,i)=>`
+    <div class="screen-thumb ${i===curScreen?'active':''}" onclick="selectScreen(${i})">
+      <img src="${sc.src}"/>
+      <div class="screen-thumb-label">
+        <span>Tela ${i+1} <small style="opacity:.6">(${sc.steps.length})</small></span>
+        <button class="sdel" onclick="event.stopPropagation();deleteScreen(${i})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+// ── Step list ─────────────────────────────────────
+function renderStepList() {
+  const sc = screens[curScreen];
+  document.getElementById('steps-list').innerHTML = sc.steps.map((s,i)=>`
+    <div class="step-item ${i===curStep?'active':''}" onclick="selectStep(${i})">
+      <div class="snum">${i+1}</div>
+      <div class="slabel">${esc(s.title)}</div>
+      <button class="sdel2" onclick="event.stopPropagation();curStep=${i};deleteStep()">✕</button>
+    </div>`).join('');
+}
+
+// ── Canvas ────────────────────────────────────────
+function renderCanvas() {
+  if (appMode !== 'edit') return;
+  const wrap = document.getElementById('canvas-wrap');
+  wrap.querySelectorAll('.hl-box,.tip-bubble,.tour-nav,.overlay').forEach(e=>e.remove());
+
+  const sc = screens[curScreen];
+  const img = document.getElementById('canvas-img');
+  if (img.src !== sc.src) {
+    img.classList.add('crossfade');
+    img.src = sc.src;
+    img.onanimationend = ()=>img.classList.remove('crossfade');
+  }
+
+  document.getElementById('clabel').textContent = `Tela ${curScreen+1} · Passo ${curStep+1}/${sc.steps.length}`;
+  document.getElementById('clabel').classList.remove('hidden');
+
+  const s = sc.steps[curStep];
+  const hasHl = s.hl.width > 0;
+
+  if (hasHl) {
+    document.getElementById('hint-bar').classList.add('hidden');
+    const hl = mkEl('div','hl-box editable','hl-box');
+    applyHlStyle(hl, s.hl);
+    ['tl','tr','bl','br'].forEach(p=>{
+      const h=mkEl('div','rh '+p); h.dataset.handle=p; hl.appendChild(h);
+    });
+    wrap.appendChild(hl);
+    attachHlDrag(hl);
+    renderBubble();
+  } else {
+    document.getElementById('hint-bar').classList.remove('hidden');
+  }
+}
+
+function applyHlStyle(el,h){ el.style.cssText=`top:${h.top}%;left:${h.left}%;width:${h.width}%;height:${h.height}%`; }
+
+function renderBubble() {
+  const wrap = document.getElementById('canvas-wrap');
+  wrap.querySelectorAll('.tip-bubble').forEach(e=>e.remove());
+  const s = screens[curScreen].steps[curStep];
+  const pos = bubblePos(s);
+  const tip = mkEl('div','tip-bubble dir-'+s.dir);
+  tip.style.cssText = `top:${pos.tipTop}%;left:${pos.tipLeft}%;width:${pos.width}%`;
+  tip.innerHTML = `<strong>${esc(s.title)}</strong><p>${esc(s.text)}</p>`;
+  wrap.appendChild(tip);
+}
+
+function bubblePos(s) {
+  const h=s.hl, dir=s.dir;
+  const BW=23, GAP=2;
+  // Para 'above': posiciona o balão com bastante espaço acima — cresce naturalmente para cima
+  // Para 'below': posiciona logo abaixo do destaque
+  const BH_ABOVE = 22; // reserva generosa para cima (o balão cresce dentro desse espaço)
+  let bt,bl;
+  if      (dir==='above'){bt=h.top-BH_ABOVE-GAP; bl=h.left}
+  else if (dir==='below'){bt=h.top+h.height+GAP;  bl=h.left}
+  else if (dir==='left') {bt=h.top; bl=h.left-BW-GAP}
+  else                   {bt=h.top; bl=h.left+h.width+GAP}
+  bt=Math.max(0.5,Math.min(bt,90));
+  bl=Math.max(0.5,Math.min(bl,100-BW-0.5));
+  return {tipTop:bt,tipLeft:bl,width:BW};
+}
+
+// ── Panel ─────────────────────────────────────────
+function renderPanel() {
+  const s = screens[curScreen].steps[curStep];
+  document.getElementById('inp-title').value = s.title;
+  document.getElementById('inp-text').value  = s.text;
+  document.querySelectorAll('.dir-btn').forEach(b=>b.classList.toggle('active',b.dataset.dir===s.dir));
+  updateCoords();
+}
+
+function updateCoords() {
+  const h = screens[curScreen].steps[curStep].hl;
+  document.getElementById('coord-box').innerHTML =
+    `top:<span>${h.top.toFixed(1)}%</span> left:<span>${h.left.toFixed(1)}%</span><br>`+
+    `w:<span>${h.width.toFixed(1)}%</span> h:<span>${h.height.toFixed(1)}%</span>`;
+}
+
+function updateText() {
+  const s = screens[curScreen].steps[curStep];
+  s.title = document.getElementById('inp-title').value;
+  s.text  = document.getElementById('inp-text').value;
+  renderStepList();
+  renderBubble();
+}
+
+function setDir(d) {
+  screens[curScreen].steps[curStep].dir = d;
+  renderPanel(); renderBubble();
+}
+
+// ── Draw highlight ────────────────────────────────
+const wrap = document.getElementById('canvas-wrap');
+const dr   = document.getElementById('draw-rect');
+
+wrap.addEventListener('mousedown', e=>{
+  if (appMode!=='edit') return;
+  if (e.target.closest('.hl-box')||e.target.closest('.tip-bubble')) return;
+  if (!(e.target===wrap||e.target.id==='canvas-img'||e.target.id==='draw-rect')) return;
+  e.preventDefault();
+  const p=relPct(e);
+  drag={type:'draw',sx:p.x,sy:p.y};
+  dr.style.cssText=`display:block;left:${p.x}%;top:${p.y}%;width:0;height:0`;
+});
+
+function attachHlDrag(hl) {
+  hl.addEventListener('mousedown', e=>{
+    if (appMode!=='edit') return;
+    e.preventDefault(); e.stopPropagation();
+    const s=screens[curScreen].steps[curStep].hl;
+    if (e.target.classList.contains('rh')) {
+      drag={type:'resize',handle:e.target.dataset.handle,sx:e.clientX,sy:e.clientY,ot:s.top,ol:s.left,ow:s.width,oh:s.height};
+    } else {
+      drag={type:'move',sx:e.clientX,sy:e.clientY,ot:s.top,ol:s.left};
+    }
+  });
+}
+
+window.addEventListener('mousemove', e=>{
+  if (!drag) return;
+  const r=wrap.getBoundingClientRect();
+  if (drag.type==='draw') {
+    const p=relPct(e);
+    const x=Math.min(drag.sx,p.x),y=Math.min(drag.sy,p.y);
+    const w=Math.abs(p.x-drag.sx),h=Math.abs(p.y-drag.sy);
+    dr.style.left=x+'%';dr.style.top=y+'%';dr.style.width=w+'%';dr.style.height=h+'%';
+  } else if (drag.type==='move') {
+    const dx=(e.clientX-drag.sx)/r.width*100,dy=(e.clientY-drag.sy)/r.height*100;
+    const h=screens[curScreen].steps[curStep].hl;
+    h.top =clamp(drag.ot+dy,0,100-h.height);
+    h.left=clamp(drag.ol+dx,0,100-h.width);
+    const el=document.getElementById('hl-box');
+    if(el) applyHlStyle(el,h);
+    updateCoords(); renderBubble();
+  } else if (drag.type==='resize') {
+    const dx=(e.clientX-drag.sx)/r.width*100,dy=(e.clientY-drag.sy)/r.height*100;
+    const s=screens[curScreen].steps[curStep].hl,hnd=drag.handle;
+    if      (hnd==='br'){s.width=Math.max(3,drag.ow+dx);s.height=Math.max(2,drag.oh+dy)}
+    else if (hnd==='bl'){const nw=Math.max(3,drag.ow-dx);s.left=clamp(drag.ol+drag.ow-nw,0,99);s.width=nw;s.height=Math.max(2,drag.oh+dy)}
+    else if (hnd==='tr'){s.width=Math.max(3,drag.ow+dx);const nh=Math.max(2,drag.oh-dy);s.top=clamp(drag.ot+drag.oh-nh,0,99);s.height=nh}
+    else if (hnd==='tl'){const nw=Math.max(3,drag.ow-dx);s.left=clamp(drag.ol+drag.ow-nw,0,99);s.width=nw;const nh=Math.max(2,drag.oh-dy);s.top=clamp(drag.ot+drag.oh-nh,0,99);s.height=nh}
+    const el=document.getElementById('hl-box');
+    if(el) applyHlStyle(el,s);
+    updateCoords(); renderBubble();
+  }
+});
+
+window.addEventListener('mouseup', e=>{
+  if (!drag) return;
+  if (drag.type==='draw') {
+    dr.style.display='none';
+    const p=relPct(e);
+    const x=Math.min(drag.sx,p.x),y=Math.min(drag.sy,p.y);
+    const w=Math.abs(p.x-drag.sx),h=Math.abs(p.y-drag.sy);
+    if (w>1&&h>0.5) {
+      screens[curScreen].steps[curStep].hl={top:+y.toFixed(1),left:+x.toFixed(1),width:+w.toFixed(1),height:+h.toFixed(1)};
+      renderCanvas(); renderPanel();
+      setStatus('Destaque criado! Escolha a posição do balão →');
+      document.getElementById('hint-bar').classList.add('hidden');
+    }
+  } else { setStatus('Pronto'); }
+  drag=null;
+});
+
+// ── Tour mode ─────────────────────────────────────
+function buildTourFlat() {
+  tourFlat = [];
+  screens.forEach((sc,si)=>{
+    sc.steps.forEach((_,pi)=>tourFlat.push({si,pi}));
+  });
+}
+
+function setMode(m) {
+  appMode=m;
+  document.getElementById('tab-edit').classList.toggle('active',m==='edit');
+  document.getElementById('tab-tour').classList.toggle('active',m==='tour');
+  document.getElementById('sidebar-screens').classList.toggle('hidden',m==='tour');
+  document.getElementById('sidebar-steps').classList.toggle('hidden',m==='tour');
+  document.getElementById('rpanel').classList.toggle('hidden',m==='tour');
+  if (m==='edit') {
+    wrap.querySelectorAll('.tour-nav,.overlay').forEach(e=>e.remove());
+    document.getElementById('tour-nav-bar').classList.add('hidden');
+    document.getElementById('main-area').style.padding = '';
+    wrap.style.borderRadius = '';
+    renderAll();
+  } else {
+    document.getElementById('main-area').style.padding = '20px';
+    wrap.style.borderRadius = '10px 10px 0 0';
+    buildTourFlat();
+    tourPos=-1;
+    renderTourStep();
+  }
+}
+
+let _lastSi = null;
+
+function renderTourStep() {
+  wrap.querySelectorAll('.hl-box,.tip-bubble,.overlay,.clabel,.hint-bar').forEach(e=>e.remove());
+
+  const isIntro = tourPos===-1;
+  const isEnd   = tourPos===tourFlat.length;
+
+  if (isIntro||isEnd) {
+    const ov=mkEl('div','overlay anim-fade');
+    ov.innerHTML=`<div class="ov-inner">
+      <div class="ov-badge">${isIntro?'Bem-vindo':'Fim do tour'}</div>
+      <div class="ov-title">${isIntro?'Conheça a plataforma':'Pronto para começar?'}</div>
+      <div class="ov-desc">${isIntro
+        ?'Uma plataforma completa de leitura e aprendizagem que engaja alunos, apoia educadores e transforma escolas em comunidades de leitores.'
+        :'Você conheceu os principais recursos. Agora é hora de colocar em prática!'}</div>
+      <button class="ov-btn" onclick="${isIntro?'tourNext()':'setMode(\'edit\')'}">${isIntro?'Começar →':'Fechar'}</button>
+    </div>`;
+    wrap.appendChild(ov);
+  } else {
+    const {si,pi} = tourFlat[tourPos];
+    const sc = screens[si];
+    const s  = sc.steps[pi];
+    const img = document.getElementById('canvas-img');
+
+    // Troca de imagem com crossfade apenas quando muda de tela
+    if (si !== _lastSi) {
+      img.classList.add('crossfade');
+      img.src = sc.src;
+      img.onanimationend = ()=>img.classList.remove('crossfade');
+      _lastSi = si;
+    }
+
+    // Highlight com animação
+    const hl=mkEl('div','hl-box pulse anim-fade');
+    applyHlStyle(hl,s.hl); wrap.appendChild(hl);
+
+    // Bubble com animação
+    const pos=bubblePos(s);
+    const tip=mkEl('div','tip-bubble dir-'+s.dir+' anim-in');
+    tip.style.cssText=`top:${pos.tipTop}%;left:${pos.tipLeft}%;width:${pos.width}%`;
+    tip.innerHTML=`<strong>${esc(s.title)}</strong><p>${esc(s.text)}</p>`;
+    wrap.appendChild(tip);
+  }
+
+  // Barra de navegação — fora do canvas
+  const navBar = document.getElementById('tour-nav-bar');
+  navBar.classList.remove('hidden');
+  const dots=tourFlat.map((_,i)=>`<div class="t-dot ${i===tourPos?'active':''}" onclick="tourGoto(${i})"></div>`).join('');
+  navBar.innerHTML=`
+    <button class="tbtn tbtn-p" onclick="tourPrev()" ${tourPos<=-1?'disabled':''}>← Voltar</button>
+    <div class="t-dots">${dots}</div>
+    <button class="tbtn tbtn-n" onclick="tourNext()" ${tourPos>=tourFlat.length?'disabled':''}>${tourPos===tourFlat.length-1?'Concluir ✓':'Próximo →'}</button>`;
+}
+
+function tourNext(){ if(tourPos<tourFlat.length){tourPos++;renderTourStep()} }
+function tourPrev(){ if(tourPos>-1){tourPos--;renderTourStep()} }
+function tourGoto(i){ tourPos=i;renderTourStep(); }
+
+// ── Build HTML do tour ────────────────────────────
+function buildTourHTML() {
+  // Monta lista plana de passos com imagem, coordenadas e texto
+  const flat=[];
+  screens.forEach(sc=>{
+    sc.steps.forEach(s=>{
+      const pos=bubblePos(s);
+      flat.push({
+        src:sc.src, title:s.title, text:s.text, dir:s.dir,
+        hl:s.hl,
+        tt:{top:pos.tipTop.toFixed(1),left:pos.tipLeft.toFixed(1),width:pos.width}
+      });
+    });
+  });
+
+  const stepsJS = flat.map(s=>
+    `{src:${JSON.stringify(s.src)},`+
+    `hl:{top:'${s.hl.top}%',left:'${s.hl.left}%',width:'${s.hl.width}%',height:'${s.hl.height}%'},`+
+    `tt:{top:'${s.tt.top}%',left:'${s.tt.left}%',width:'${s.tt.width}%'},`+
+    `dir:${JSON.stringify(s.dir)},title:${JSON.stringify(s.title)},text:${JSON.stringify(s.text)}}`
+  ).join(',\n');
+
+  const out = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>
+<title>Tour Árvore</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1f27;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.tc{width:960px;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 8px 48px rgba(0,0,0,.35)}
+.th{background:#1A4B5A;padding:12px 22px;display:flex;align-items:center;justify-content:space-between}
+.tl{color:#fff;font-size:13px;font-weight:700}.tl span{color:#7DD4B8}
+.prog{display:flex;align-items:center;gap:10px}
+.prog-bar{width:100px;height:4px;background:rgba(255,255,255,.2);border-radius:99px;overflow:hidden}
+.prog-fill{height:100%;background:#7DD4B8;border-radius:99px;transition:width .4s ease}
+.prog-lbl{font-size:11px;color:rgba(255,255,255,.6);min-width:32px;text-align:right}
+.sa{position:relative;width:960px;height:600px;overflow:hidden;line-height:0}
+.sa img{width:960px;height:600px;display:block}
+@keyframes cfade{from{opacity:0}to{opacity:1}}
+@keyframes hlpulse{0%,100%{box-shadow:0 0 0 3000px rgba(0,0,0,.45),0 0 0 3px rgba(125,212,184,.3)}50%{box-shadow:0 0 0 3000px rgba(0,0,0,.45),0 0 0 9px rgba(125,212,184,.08)}}
+@keyframes slideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.img-anim{animation:cfade .35s ease}
+.hb{position:absolute;border:2.5px solid #7DD4B8;border-radius:6px;pointer-events:none;z-index:10;animation:hlpulse 2s ease-in-out infinite,fadeIn .25s ease}
+.tb{position:absolute;background:#1A4B5A;border:1px solid rgba(125,212,184,.35);border-radius:10px;padding:11px 13px;font-size:12px;color:rgba(255,255,255,.85);line-height:1.55;z-index:20;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:slideIn .3s ease;word-wrap:break-word;overflow-wrap:break-word;word-break:normal}
+.tb strong{display:block;font-size:12.5px;font-weight:700;color:#fff;margin-bottom:4px}
+.tb::before{content:'';position:absolute;border:8px solid transparent}
+.tb.dir-above::before{bottom:-16px;left:18px;border-top-color:#1A4B5A}
+.tb.dir-below::before{top:-16px;left:18px;border-bottom-color:#1A4B5A}
+.tb.dir-left::before{right:-16px;top:14px;border-left-color:#1A4B5A}
+.tb.dir-right::before{left:-16px;top:14px;border-right-color:#1A4B5A}
+.ov{position:absolute;inset:0;background:rgba(13,31,39,.9);display:flex;align-items:center;justify-content:center;z-index:50;animation:fadeIn .25s ease}
+.oi{background:#132330;border-radius:14px;padding:30px 26px;max-width:320px;text-align:center;border:1px solid rgba(125,212,184,.2);box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.ob{display:inline-block;background:rgba(125,212,184,.15);color:#7DD4B8;font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;margin-bottom:11px;text-transform:uppercase;letter-spacing:.06em}
+.ot{font-size:19px;font-weight:700;color:#fff;margin-bottom:9px;line-height:1.3}
+.od{font-size:12px;color:rgba(255,255,255,.7);line-height:1.65;margin-bottom:20px}
+.obtn{background:#7DD4B8;color:#1A4B5A;border:none;border-radius:8px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.obtn:hover{background:#5DCAA5}
+.nav{background:#1A4B5A;padding:11px 20px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(125,212,184,.15)}
+.nd{display:flex;gap:6px;flex-wrap:wrap;max-width:280px;justify-content:center}
+.dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2);cursor:pointer;transition:all .25s}
+.dot.active{background:#7DD4B8;transform:scale(1.3)}
+.bn{padding:8px 18px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:all .15s}
+.bp{background:rgba(125,212,184,.1);color:#7DD4B8;border:1px solid rgba(125,212,184,.3)}.bp:hover{background:rgba(125,212,184,.2)}
+.bx{background:#7DD4B8;color:#1A4B5A}.bx:hover{background:#5DCAA5}
+.bn:disabled{opacity:.25;cursor:default}
+.hidden{display:none!important}
+</style></head><body>
+<div class="tc">
+  <div class="th">
+    <div class="tl">Árvore<span>·</span> Visita guiada</div>
+    <div class="prog"><div class="prog-bar"><div class="prog-fill" id="pf"></div></div><span class="prog-lbl" id="pl"></span></div>
+  </div>
+  <div class="sa" id="sa">
+    <img id="si" src="" draggable="false"/>
+    <div class="hb hidden" id="hb"></div>
+    <div class="tb hidden" id="tb"></div>
+    <div class="ov hidden" id="ov">
+      <div class="oi">
+        <div class="ob" id="ob"></div><div class="ot" id="ot2"></div>
+        <div class="od" id="od"></div><button class="obtn" id="obt"></button>
+      </div>
+    </div>
+  </div>
+  <div class="nav">
+    <button class="bn bp" id="bp" onclick="prev()" disabled>← Voltar</button>
+    <div class="nd" id="nd"></div>
+    <button class="bn bx" id="bn" onclick="next()">Próximo →</button>
+  </div>
+</div>
+<script>
+const S=[${stepsJS}];
+let c=-1,lastSrc='';
+function r(){
+  const n=S.length;
+  document.getElementById('pf').style.width=(c<0?0:((c+1)/n*100))+'%';
+  document.getElementById('pl').textContent=c<0?'':((c+1)+'/'+n);
+  const hb=document.getElementById('hb'),tb=document.getElementById('tb'),ov=document.getElementById('ov');
+  const isI=c===-1,isE=c===n;
+  if(isI||isE){
+    hb.classList.add('hidden');tb.classList.add('hidden');ov.classList.remove('hidden');
+    ov.classList.remove('hidden'); void ov.offsetWidth; ov.style.animation='none'; void ov.offsetWidth; ov.style.animation='';
+    document.getElementById('ob').textContent=isI?'Bem-vindo':'Fim do tour';
+    document.getElementById('ot2').textContent=isI?'Conheça a plataforma':'Pronto para começar?';
+    document.getElementById('od').textContent=isI?'Uma plataforma completa de leitura e aprendizagem que engaja alunos, apoia educadores e transforma escolas em comunidades de leitores.':'Você conheceu os principais recursos. Agora é hora de colocar em prática!';
+    const b=document.getElementById('obt');b.textContent=isI?'Começar →':'Fechar';b.onclick=isI?next:()=>ov.classList.add('hidden');
+  }else{
+    ov.classList.add('hidden');
+    const s=S[c];
+    const img=document.getElementById('si');
+    if(s.src!==lastSrc){img.classList.remove('img-anim');void img.offsetWidth;img.classList.add('img-anim');img.src=s.src;lastSrc=s.src;}
+    // HL
+    const nh=hb.cloneNode();nh.id='hb';nh.className='hb';nh.style.cssText='top:'+s.hl.top+';left:'+s.hl.left+';width:'+s.hl.width+';height:'+s.hl.height;
+    hb.replaceWith(nh);
+    // TIP
+    const nt=tb.cloneNode();nt.id='tb';nt.className='tb dir-'+s.dir;nt.style.cssText='top:'+s.tt.top+';left:'+s.tt.left+';width:'+s.tt.width;
+    nt.innerHTML='<strong>'+s.title+'</strong><p>'+s.text+'</p>';
+    tb.replaceWith(nt);
+  }
+  document.getElementById('bp').disabled=c<=-1;
+  document.getElementById('bn').textContent=c===n-1?'Concluir ✓':'Próximo →';
+  document.getElementById('nd').innerHTML=S.map((_,i)=>'<div class="dot'+(i===c?' active':'')+'" onclick="g('+i+')"></div>').join('');
+}
+function next(){if(c<S.length)c++;r();}
+function prev(){if(c>-1)c--;r();}
+function g(i){c=i;r();}
+r();
+<\/script></body></html>`;
+  return out;
+}
+
+// ── Export (baixar) ───────────────────────────────
+function exportTour() {
+  const out = buildTourHTML();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([out],{type:'text/html'}));
+  a.download='tour-arvore-final.html';
+  a.click();
+  setStatus('Tour baixado!');
+}
+
+// ── Utils ─────────────────────────────────────────
+function relPct(e){
+  const r=wrap.getBoundingClientRect();
+  return{x:+Math.max(0,Math.min(100,(e.clientX-r.left)/r.width*100)).toFixed(1),
+         y:+Math.max(0,Math.min(100,(e.clientY-r.top)/r.height*100)).toFixed(1)};
+}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function mkEl(tag,cls,id){const e=document.createElement(tag);if(cls)e.className=cls;if(id)e.id=id;return e}
+function setStatus(m){document.getElementById('status-txt').textContent=m}
+
+// ── GITHUB PUBLISH ────────────────────────────────
+function openGithubPublish() {
+  // Restaura valores salvos
+  const saved = JSON.parse(localStorage.getItem('gh-config') || '{}');
+  if (saved.repo)  document.getElementById('gh-repo').value  = saved.repo;
+  if (saved.token) document.getElementById('gh-token').value = saved.token;
+  document.getElementById('gh-filename').value = '';
+  document.getElementById('gh-preview').textContent = '—';
+  document.getElementById('gh-status').textContent = 'Preencha os campos e clique em Publicar.';
+  document.getElementById('gh-status').className = 'gh-status';
+  document.getElementById('gh-modal').classList.add('open');
+}
+
+function closeGithub() {
+  document.getElementById('gh-modal').classList.remove('open');
+}
+
+function updateGhPreview() {
+  const name = document.getElementById('gh-filename').value.trim()
+    .replace(/[^a-z0-9\-_]/gi, '-').replace(/\.html$/i, '');
+  const repo = document.getElementById('gh-repo').value.trim();
+  const user = repo.split('/')[0] || 'usuario';
+  const repoName = repo.split('/')[1] || 'arvore-tours';
+  document.getElementById('gh-preview').textContent = name
+    ? `https://${user}.github.io/${repoName}/${name}`
+    : '—';
+}
+
+async function publishToGithub() {
+  const filename = document.getElementById('gh-filename').value.trim().replace(/[^a-z0-9\-_]/gi,'-').replace(/\.html$/i,'');
+  const repo     = document.getElementById('gh-repo').value.trim();
+  const token    = document.getElementById('gh-token').value.trim();
+
+  if (!filename) { setGhStatus('Defina um nome para o arquivo.','err'); return; }
+  if (!repo || !repo.includes('/')) { setGhStatus('Repositório inválido. Use o formato usuario/repo.','err'); return; }
+  if (!token) { setGhStatus('Token do GitHub obrigatório.','err'); return; }
+
+  // Salva config (sem o token por segurança — salva só o repo)
+  localStorage.setItem('gh-config', JSON.stringify({ repo }));
+
+  const btn = document.getElementById('btn-publish');
+  btn.disabled = true;
+  setGhStatus('Gerando HTML...','running');
+
+  // Gera o HTML do tour
+  const html = buildTourHTML();
+  const b64  = btoa(unescape(encodeURIComponent(html)));
+  const path = `${filename}.html`;
+
+  setGhStatus('Publicando no GitHub...','running');
+
+  try {
+    // Verifica se arquivo já existe (para pegar o SHA)
+    let sha = null;
+    const check = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (check.ok) {
+      const existing = await check.json();
+      sha = existing.sha;
+    }
+
+    // Cria ou atualiza o arquivo
+    const body = {
+      message: sha ? `Atualiza ${path}` : `Adiciona ${path}`,
+      content: b64,
+      ...(sha ? { sha } : {})
+    };
+
+    const res = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || 'Erro ao publicar');
+    }
+
+    const user = repo.split('/')[0];
+    const repoName = repo.split('/')[1];
+    const link = `https://${user}.github.io/${repoName}/${filename}`;
+    setGhStatus(`✅ Publicado! <a href="${link}" target="_blank" style="color:var(--accent)">${link}</a>`,'ok');
+
+  } catch(err) {
+    setGhStatus('Erro: ' + err.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function setGhStatus(msg, type='') {
+  const el = document.getElementById('gh-status');
+  el.innerHTML = msg;
+  el.className = 'gh-status' + (type ? ' '+type : '');
+}
+
+// ── IA ─────────────────────────────────────────────
+let aiImageB64 = null;
+let aiStepsResult = [];
+
+// Drop na área do modal
+const aiDrop = document.getElementById('ai-drop');
+const aiFile = document.getElementById('ai-file');
+aiDrop.addEventListener('dragover',  e=>{e.preventDefault();aiDrop.classList.add('over')});
+aiDrop.addEventListener('dragleave', ()=>aiDrop.classList.remove('over'));
+aiDrop.addEventListener('drop', e=>{
+  e.preventDefault(); aiDrop.classList.remove('over');
+  const f=e.dataTransfer.files[0];
+  if(f&&f.type.startsWith('image/')) loadAIImage(f);
+});
+aiFile.addEventListener('change', e=>{ if(e.target.files[0]) loadAIImage(e.target.files[0]); });
+
+function loadAIImage(file) {
+  const r = new FileReader();
+  r.onload = ev => {
+    aiImageB64 = ev.target.result;
+    document.getElementById('ai-preview').src = aiImageB64;
+    document.getElementById('ai-preview-wrap').style.display = 'block';
+    document.getElementById('ai-drop').style.display = 'none';
+    setAIStatus('Imagem carregada. Clique em Gerar.');
+  };
+  r.readAsDataURL(file);
+}
+
+function resetAIImage() {
+  aiImageB64 = null;
+  document.getElementById('ai-preview-wrap').style.display = 'none';
+  document.getElementById('ai-preview').src = '';
+  document.getElementById('ai-drop').style.display = 'block';
+  document.getElementById('ai-file').value = '';
+  setAIStatus('Selecione uma imagem e descreva o produto.');
+}
+
+function openAI() {
+  aiStepsResult = [];
+  document.getElementById('ai-prompt').value = '';
+  document.getElementById('ai-results').style.display = 'none';
+  document.getElementById('ai-result-list').innerHTML = '';
+  document.getElementById('ai-file').value = '';
+
+  // Se já tem tela carregada, usa ela automaticamente
+  if (screens.length > 0) {
+    aiImageB64 = screens[curScreen].src;
+    document.getElementById('ai-preview').src = aiImageB64;
+    document.getElementById('ai-preview-wrap').style.display = 'block';
+    document.getElementById('ai-drop').style.display = 'none';
+    setAIStatus('Usando a tela atual. Descreva o produto e clique em Gerar.');
+  } else {
+    aiImageB64 = null;
+    document.getElementById('ai-preview-wrap').style.display = 'none';
+    document.getElementById('ai-preview').src = '';
+    document.getElementById('ai-drop').style.display = 'block';
+    setAIStatus('Selecione uma imagem e descreva o produto.');
+  }
+
+  document.getElementById('ai-modal').classList.add('open');
+}
+
+function closeAI() {
+  document.getElementById('ai-modal').classList.remove('open');
+  document.getElementById('ai-results').style.display='none';
+  aiStepsResult=[];
+}
+
+function setAIStatus(msg, type='') {
+  const el=document.getElementById('ai-status');
+  el.textContent=msg;
+  el.className='ai-status'+(type?' '+type:'');
+}
+
+async function runAI() {
+  if(!aiImageB64){ setAIStatus('Selecione uma imagem primeiro.','err'); return; }
+  const prompt=document.getElementById('ai-prompt').value.trim();
+  if(!prompt){ setAIStatus('Descreva o produto no campo de texto.','err'); return; }
+  const btn=document.getElementById('btn-run');
+  btn.disabled=true;
+  setAIStatus('Analisando a imagem...','running');
+  document.getElementById('ai-results').style.display='none';
+
+  // Extrai base64 puro (sem o prefixo data:...)
+  const b64=aiImageB64.split(',')[1];
+  const mediaType=aiImageB64.split(';')[0].replace('data:','');
+
+  const systemPrompt=`Você é um especialista em product tours interativos. Analise a imagem de uma tela de produto e gere passos de tour guiado.
+
+Retorne APENAS um JSON válido, sem markdown, sem explicações, no seguinte formato:
+{
+  "steps": [
+    {
+      "title": "Nome curto da funcionalidade",
+      "text": "Descrição em 1-2 frases do que essa área faz e por que é útil",
+      "area": "descrição textual da área destacada (ex: menu superior, botão de busca, card de floresta)",
+      "hl": { "top": 5.0, "left": 24.0, "width": 47.0, "height": 6.0 },
+      "dir": "below"
+    }
+  ]
+}
+
+Regras para as coordenadas (em % do tamanho da imagem, 0-100):
+- top: distância do topo
+- left: distância da esquerda
+- width: largura do destaque
+- height: altura do destaque
+- dir: onde o balão aparece — "above" (balão acima), "below" (balão abaixo), "left" (balão à esquerda), "right" (balão à direita)
+
+Escolha dir baseado em onde há mais espaço livre ao redor do destaque.
+Decida você mesmo quantos passos são necessários para cobrir bem a interface — nem de menos (deixar áreas importantes sem explicar) nem de mais (repetir ou destacar coisas irrelevantes).`;
+
+  const userPrompt=`Produto: ${prompt}\n\nAnalise a imagem e gere os passos de tour guiado necessários para cobrir as funcionalidades mais importantes desta tela.`;
+
+  try {
+    // URL do seu Cloudflare Worker — troque pelo seu após criar
+    const WORKER_URL = 'https://arvore-tour.leonardo-d4f.workers.dev';
+
+    const res=await fetch(WORKER_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:2000,
+        system: systemPrompt,
+        messages:[{
+          role:'user',
+          content:[
+            {type:'image',source:{type:'base64',media_type:mediaType,data:b64}},
+            {type:'text',text:userPrompt}
+          ]
+        }]
+      })
+    });
+
+    if(!res.ok){ throw new Error('Erro na API: '+res.status); }
+    const data=await res.json();
+    const raw=data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
+
+    // Parse JSON — remove possíveis ```json``` se vier
+    const clean=raw.replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(clean);
+
+    if(!parsed.steps||!parsed.steps.length) throw new Error('Resposta sem passos.');
+
+    aiStepsResult=parsed.steps;
+    renderAIResults(parsed.steps);
+    setAIStatus(`${parsed.steps.length} passos gerados. Revise e clique em Aplicar.`,'');
+
+  } catch(err) {
+    setAIStatus('Erro: '+err.message,'err');
+    console.error(err);
+  } finally {
+    btn.disabled=false;
+  }
+}
+
+function renderAIResults(steps) {
+  const list=document.getElementById('ai-result-list');
+  list.innerHTML=steps.map((s,i)=>`
+    <div class="ai-result-item">
+      <div class="air-num">${i+1}</div>
+      <div class="air-text">
+        <strong>${esc(s.title)}</strong>
+        <p>${esc(s.text)}</p>
+        <p style="color:rgba(125,212,184,0.6);font-size:10px;margin-top:3px">Área: ${esc(s.area||'—')} · Balão: ${s.dir}</p>
+      </div>
+    </div>`).join('');
+  document.getElementById('ai-results').style.display='block';
+}
+
+function applyAISteps() {
+  if(!aiStepsResult.length) return;
+
+  // Usa a imagem do modal como nova tela se for diferente da tela atual
+  const targetSrc = aiImageB64;
+  let targetScreenIdx = screens.findIndex(s=>s.src===targetSrc);
+
+  if(targetScreenIdx===-1) {
+    // Adiciona como nova tela
+    screens.push({ id:uid(), src:targetSrc, steps:[] });
+    targetScreenIdx=screens.length-1;
+  }
+
+  // Substitui os passos da tela alvo
+  screens[targetScreenIdx].steps = aiStepsResult.map((s,i)=>({
+    title: s.title,
+    text:  s.text,
+    hl:    { top:s.hl.top, left:s.hl.left, width:s.hl.width, height:s.hl.height },
+    dir:   s.dir||'below',
+  }));
+
+  curScreen=targetScreenIdx;
+  curStep=0;
+  closeAI();
+  renderAll();
+  setStatus('✨ '+aiStepsResult.length+' passos gerados pela IA. Ajuste os destaques arrastando.');
+}
+</script>
+</body>
+</html>
