@@ -967,7 +967,7 @@ function setStatus(m){document.getElementById('status-txt').textContent=m}
 // ── GITHUB PUBLISH ────────────────────────────────
 function ghConfig() {
   // Configurações fixas — altere aqui se mudar de repositório
-  const DEFAULTS = { repo: 'leoippolito/tour-arvore', token: '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' };
+  const DEFAULTS = { repo: 'leoippolito/tour-arvore', token: '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' };
   const saved = JSON.parse(localStorage.getItem('gh-config') || '{}');
   return { ...DEFAULTS, ...saved };
 }
