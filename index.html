@@ -190,6 +190,24 @@ textarea{resize:vertical;min-height:68px;line-height:1.5}
 .nm-file-name{font-size:12px;color:#fff;font-weight:500}
 .nm-file-badge{font-size:10px;color:var(--danger);background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2);border-radius:4px;padding:2px 6px}
 
+/* ── MODAL DELETAR ──────────────────────────────── */
+#del-modal{position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:600;display:none;align-items:center;justify-content:center}
+#del-modal.open{display:flex}
+.del-box{background:var(--panel);border-radius:14px;width:380px;border:1px solid rgba(248,113,113,0.3);box-shadow:0 16px 48px rgba(0,0,0,.6);padding:22px}
+.del-box h2{font-size:14px;font-weight:700;color:var(--danger);margin-bottom:6px}
+.del-box p{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6}
+.del-list{display:flex;flex-direction:column;gap:5px;max-height:180px;overflow-y:auto;margin-bottom:14px}
+.del-item{display:flex;align-items:center;justify-content:space-between;background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:8px 12px}
+.del-item-name{font-size:12px;color:#fff}
+.del-item-btn{font-size:11px;font-weight:600;color:var(--danger);background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2);border-radius:5px;padding:3px 10px;cursor:pointer}
+.del-item-btn:hover{background:rgba(248,113,113,0.2)}
+.del-pw-wrap{display:flex;gap:8px;margin-bottom:10px}
+.del-pw-wrap input{flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-size:12px;font-family:inherit;outline:none}
+.del-pw-wrap input:focus{border-color:var(--danger)}
+.del-status{font-size:11px;min-height:16px;line-height:1.5}
+.del-status.err{color:var(--danger)}
+.del-status.ok{color:#4ade80}
+
 /* ── MODAL GITHUB ───────────────────────────────── */
 #gh-modal{position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:500;display:none;align-items:center;justify-content:center}
 #gh-modal.open{display:flex}
@@ -306,6 +324,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.5}
     <button class="btn btn-p" onclick="exportTour()">⬇ Baixar HTML</button>
     <button class="btn btn-gh" onclick="quickPublish()">🚀 Publicar</button>
     <button class="btn btn-cfg" onclick="openConfig()" title="Configurações GitHub">⚙️</button>
+    <button class="btn btn-d" onclick="openDelModal()" title="Gerenciar tours">🗑</button>
   </div>
 </div>
 
@@ -389,6 +408,21 @@ textarea{resize:vertical;min-height:68px;line-height:1.5}
 
 <!-- Upload extra (nova tela) — input oculto -->
 <input type="file" accept="image/*" id="file-input-extra" style="display:none"/>
+
+<!-- MODAL DELETAR -->
+<div id="del-modal">
+  <div class="del-box">
+    <h2>🗑 Gerenciar tours</h2>
+    <p>Digite a senha de admin para excluir um tour. Isso remove o `.html` e o `.json` do GitHub.</p>
+    <div class="del-pw-wrap">
+      <input type="password" id="del-pw" placeholder="Senha de admin"/>
+      <button class="btn btn-d" onclick="loadDelList()">Entrar</button>
+    </div>
+    <div class="del-status" id="del-status"></div>
+    <div class="del-list hidden" id="del-list"></div>
+    <button class="btn btn-g" style="width:100%;margin-top:10px" onclick="closeDelModal()">Fechar</button>
+  </div>
+</div>
 
 <!-- MODAL: nome do arquivo (publicação rápida) -->
 <div id="name-modal">
@@ -675,7 +709,7 @@ async function loadTourFromGitHub(name, token) {
     });
     if (!res.ok) throw new Error('Não foi possível carregar o tour');
     const data = await res.json();
-    const json = JSON.parse(atob(data.content.replace(/\n/g,'')));
+    const json = JSON.parse(decodeURIComponent(escape(atob(data.content.replace(/\n/g,'')))));
 
     screens = json.screens;
     curScreen = 0; curStep = 0;
@@ -1248,6 +1282,98 @@ function setStatus(m){const el=document.getElementById('status-txt');if(el)el.te
 
 // Carrega tours existentes ao abrir a tela inicial
 loadExistingTours();
+const DELETE_PASSWORD = 'arvore*7856#tour'; // troque por uma senha forte
+
+function openDelModal() {
+  document.getElementById('del-pw').value = '';
+  document.getElementById('del-status').textContent = '';
+  document.getElementById('del-status').className = 'del-status';
+  document.getElementById('del-list').innerHTML = '';
+  document.getElementById('del-list').classList.add('hidden');
+  document.getElementById('del-modal').classList.add('open');
+}
+
+function closeDelModal() {
+  document.getElementById('del-modal').classList.remove('open');
+}
+
+async function loadDelList() {
+  const pw = document.getElementById('del-pw').value;
+  if (pw !== DELETE_PASSWORD) {
+    document.getElementById('del-status').textContent = 'Senha incorreta.';
+    document.getElementById('del-status').className = 'del-status err';
+    return;
+  }
+
+  document.getElementById('del-status').textContent = 'Carregando...';
+  document.getElementById('del-status').className = 'del-status';
+
+  try {
+    const authRes = await fetch(WORKER_URL + '/auth', {
+      method: 'POST', headers: workerHeaders(), body: JSON.stringify({ route: '/auth' })
+    });
+    const authData = await authRes.json();
+    if (!authData.ok) throw new Error('Não autorizado');
+
+    const res = await fetch('https://api.github.com/repos/leoippolito/tour-arvore/contents/', {
+      headers: { Authorization: `token ${authData.token}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (!res.ok) throw new Error('Erro ao listar');
+    const files = await res.json();
+    const htmlFiles = files.filter(f => f.name.endsWith('.html') && f.name !== 'index.html').map(f => f.name.replace('.html',''));
+
+    const list = document.getElementById('del-list');
+    if (htmlFiles.length === 0) {
+      list.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px">Nenhum tour publicado.</div>';
+    } else {
+      list.innerHTML = htmlFiles.map(name => `
+        <div class="del-item">
+          <span class="del-item-name">📄 ${name}</span>
+          <button class="del-item-btn" onclick="deleteTour('${name}','${authData.token}',this)">Excluir</button>
+        </div>`).join('');
+    }
+    list.classList.remove('hidden');
+    document.getElementById('del-status').textContent = '';
+  } catch(e) {
+    document.getElementById('del-status').textContent = 'Erro: ' + e.message;
+    document.getElementById('del-status').className = 'del-status err';
+  }
+}
+
+async function deleteTour(name, token, btn) {
+  if (!confirm(`Excluir "${name}"? Essa ação não pode ser desfeita.`)) return;
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  try {
+    const repo = 'leoippolito/tour-arvore';
+    const deleteFile = async (path) => {
+      const r = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+        headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' }
+      });
+      if (!r.ok) return; // arquivo não existe, ok
+      const data = await r.json();
+      await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+        method: 'DELETE',
+        headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: `Remove ${path}`, sha: data.sha })
+      });
+    };
+
+    await deleteFile(name + '.html');
+    await deleteFile(name + '.json');
+
+    // Remove da lista
+    btn.closest('.del-item').remove();
+    document.getElementById('del-status').textContent = `"${name}" excluído.`;
+    document.getElementById('del-status').className = 'del-status ok';
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Excluir';
+    document.getElementById('del-status').textContent = 'Erro: ' + e.message;
+    document.getElementById('del-status').className = 'del-status err';
+  }
+}
 
 // ── GITHUB PUBLISH ────────────────────────────────
 // ── GITHUB PUBLISH ────────────────────────────────
@@ -1414,7 +1540,7 @@ async function doPublish() {
     });
 
     const link = `https://leoippolito.github.io/tour-arvore/${filename}`;
-    setNmStatus(`✅ Publicado! <a href="${link}" target="_blank" style="color:var(--accent)">${link}</a>`,'ok');
+    setNmStatus(`✅ Publicado! <a href="${link}" target="_blank" style="color:var(--accent)">${link}</a><br><span style="color:var(--muted)">⏱ O link pode demorar 1-2 minutos para funcionar.</span>`,'ok');
     btn.textContent = '✅ Publicado!';
 
   } catch(err) {
