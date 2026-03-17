@@ -26,6 +26,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .drop-sub{font-size:12px;color:var(--muted);line-height:1.7}.drop-sub b{color:var(--accent)}
 .up-tip{font-size:11px;color:var(--muted);max-width:380px;text-align:center;line-height:1.8}
 .up-tip b{color:var(--accent)}
+.up-divider{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12px;width:460px}
+.up-divider::before,.up-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.up-existing{width:460px}
+.up-existing h3{font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;font-weight:600}
+.up-tour-list{display:flex;flex-direction:column;gap:7px;max-height:220px;overflow-y:auto}
+.up-tour-item{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:10px 14px;cursor:pointer;transition:all .15s}
+.up-tour-item:hover{border-color:var(--accent);background:rgba(125,212,184,0.06)}
+.up-tour-name{font-size:13px;color:#fff;font-weight:500}
+.up-tour-meta{font-size:11px;color:var(--muted)}
+.up-tour-btn{font-size:11px;color:var(--accent);background:rgba(125,212,184,0.1);border:1px solid var(--border);border-radius:5px;padding:3px 9px;cursor:pointer}
+.up-loading{font-size:12px;color:var(--muted);text-align:center;padding:10px}
 
 /* ── TOPBAR ─────────────────────────────────────── */
 .topbar{background:var(--brand);height:48px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-bottom:1px solid var(--border)}
@@ -233,6 +244,19 @@ textarea{resize:vertical;min-height:68px;line-height:1.5}
 .air-text p{font-size:11px;color:var(--muted);line-height:1.5}
 .btn-apply{width:100%;padding:10px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;font-family:inherit;background:var(--accent);color:var(--brand);margin-top:6px}
 .btn-apply:hover{background:var(--accent2)}
+
+/* ── TELA INICIAL ───────────────────────────────── */
+.up-existing{width:480px}
+.up-existing h3{font-size:12px;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.up-tour-list{display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto}
+.up-loading{font-size:12px;color:var(--muted);text-align:center;padding:12px}
+.up-tour-item{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 14px;cursor:pointer;transition:all .15s}
+.up-tour-item:hover{border-color:var(--accent);background:rgba(125,212,184,0.06)}
+.up-tour-name{font-size:13px;color:#fff;font-weight:500}
+.up-tour-meta{font-size:10px;color:var(--muted)}
+.up-tour-btn{font-size:11px;font-weight:600;color:var(--accent);background:rgba(125,212,184,0.1);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer}
+.up-divider{font-size:11px;color:var(--muted);text-align:center;width:480px;display:flex;align-items:center;gap:10px}
+.up-divider::before,.up-divider::after{content:'';flex:1;height:1px;background:var(--border)}
 </style>
 </head>
 <body>
@@ -241,6 +265,18 @@ textarea{resize:vertical;min-height:68px;line-height:1.5}
 <div id="upload-screen">
   <div class="up-logo">Árvore<span>·</span> Tour Editor</div>
   <div class="up-subtitle">Crie tours interativos da sua plataforma</div>
+
+  <!-- Tours existentes -->
+  <div class="up-existing" id="up-existing" style="display:none">
+    <h3>✏️ Editar tour existente</h3>
+    <div class="up-tour-list" id="up-tour-list">
+      <div class="up-loading">Carregando tours...</div>
+    </div>
+  </div>
+
+  <div class="up-divider" id="up-divider" style="display:none">ou criar novo</div>
+
+  <!-- Upload nova imagem -->
   <div class="drop-zone" id="drop-zone">
     <input type="file" accept="image/*" id="file-input"/>
     <span class="drop-icon">🖼️</span>
@@ -441,7 +477,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.5}
 <script>
 // ── Configuração ───────────────────────────────────
 const WORKER_URL   = 'https://arvore-tour.leonardo-d4f.workers.dev';
-const EDITOR_TOKEN = 'arvore-editor-stol9'; // mesmo valor do Secret EDITOR_TOKEN no Cloudflare
+const EDITOR_TOKEN = 'arvore-editor-stol9' ; // mesmo valor do Secret EDITOR_TOKEN no Cloudflare
 
 // Helper: headers autenticados para o Worker
 function workerHeaders() {
@@ -460,7 +496,102 @@ let tourPos   = -1;
 let drag      = null;
 const CW = 960, CH = 600;
 
-// ── Upload ────────────────────────────────────────
+// ── Carrega tours existentes na tela inicial ──────
+async function loadExistingTours() {
+  try {
+    const authRes = await fetch(WORKER_URL + '/auth', {
+      method: 'POST', headers: workerHeaders(), body: JSON.stringify({ route: '/auth' })
+    });
+    const authData = await authRes.json();
+    if (!authData.ok) return;
+
+    const res = await fetch('https://api.github.com/repos/leoippolito/tour-arvore/contents/', {
+      headers: { Authorization: `token ${authData.token}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (!res.ok) return;
+
+    const files = await res.json();
+    const htmlFiles = files.filter(f => f.name.endsWith('.html') && f.name !== 'index.html');
+
+    if (htmlFiles.length === 0) return;
+
+    // Mostra seção de tours existentes
+    document.getElementById('up-existing').style.display = 'block';
+    document.getElementById('up-divider').style.display = 'flex';
+
+    const list = document.getElementById('up-tour-list');
+    list.innerHTML = htmlFiles.map(f => {
+      const name = f.name.replace('.html','');
+      const link = `https://leoippolito.github.io/tour-arvore/${name}`;
+      return `<div class="up-tour-item">
+        <div>
+          <div class="up-tour-name">📄 ${name}</div>
+          <div class="up-tour-meta"><a href="${link}" target="_blank" style="color:var(--accent);font-size:10px">${link}</a></div>
+        </div>
+        <button class="up-tour-btn" onclick="loadExistingTour('${f.download_url}','${name}')">Editar →</button>
+      </div>`;
+    }).join('');
+
+  } catch(e) {
+    // Silencioso — se não carregar, só não mostra
+  }
+}
+
+async function loadExistingTour(downloadUrl, name) {
+  const list = document.getElementById('up-tour-list');
+  list.innerHTML = '<div class="up-loading">Carregando tour...</div>';
+
+  try {
+    const res = await fetch(downloadUrl);
+    const html = await res.text();
+
+    // Extrai os dados do tour do HTML
+    // Procura o array de steps no script
+    const match = html.match(/const S=(\[[\s\S]*?\]);/);
+    if (!match) throw new Error('Formato de tour não reconhecido');
+
+    const stepsData = JSON.parse(match[1]);
+
+    // Reconstrói screens e steps a partir dos dados
+    // Agrupa por src (imagem)
+    const screenMap = new Map();
+    stepsData.forEach((s, i) => {
+      if (!screenMap.has(s.src)) {
+        screenMap.set(s.src, { id: uid(), src: s.src, steps: [] });
+      }
+      screenMap.get(s.src).steps.push({
+        title: s.title,
+        text:  s.text,
+        dir:   s.dir || 'below',
+        hl:    {
+          top:    parseFloat(s.hl.top),
+          left:   parseFloat(s.hl.left),
+          width:  parseFloat(s.hl.width),
+          height: parseFloat(s.hl.height),
+        }
+      });
+    });
+
+    screens   = Array.from(screenMap.values());
+    curScreen = 0;
+    curStep   = 0;
+
+    // Abre o editor
+    document.getElementById('upload-screen').style.display = 'none';
+    const ew = document.getElementById('editor-wrap');
+    ew.style.display = 'flex';
+    ew.classList.remove('hidden');
+    renderAll();
+    setStatus(`Tour "${name}" carregado. Edite e publique quando quiser.`);
+
+  } catch(e) {
+    list.innerHTML = `<div class="up-loading" style="color:var(--danger)">Erro ao carregar: ${e.message}</div>`;
+    setTimeout(loadExistingTours, 2000);
+  }
+}
+
+// Carrega tours ao iniciar
+loadExistingTours();
 const dropZone  = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 const fileExtra = document.getElementById('file-input-extra');
@@ -480,14 +611,79 @@ function loadFirstImage(file) {
   r.onload = ev => {
     screens = [{ id: uid(), src: ev.target.result, steps: [mkStep(1)] }];
     curScreen = 0; curStep = 0;
-    document.getElementById('upload-screen').style.display = 'none';
-    const ew = document.getElementById('editor-wrap');
-    ew.style.display = 'flex';
-    ew.classList.remove('hidden');
-    renderAll();
+    openEditor();
     setStatus('Tela adicionada. Arraste para criar o primeiro destaque.');
   };
   r.readAsDataURL(file);
+}
+
+function openEditor() {
+  document.getElementById('upload-screen').style.display = 'none';
+  const ew = document.getElementById('editor-wrap');
+  ew.style.display = 'flex';
+  ew.classList.remove('hidden');
+  renderAll();
+}
+
+// Carrega lista de tours existentes no GitHub ao abrir
+async function loadExistingTours() {
+  try {
+    const authRes = await fetch(WORKER_URL + '/auth', {
+      method: 'POST', headers: workerHeaders(), body: JSON.stringify({ route: '/auth' })
+    });
+    const authData = await authRes.json();
+    if (!authData.ok) return;
+
+    const res = await fetch('https://api.github.com/repos/leoippolito/tour-arvore/contents/', {
+      headers: { Authorization: `token ${authData.token}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (!res.ok) return;
+
+    const files = await res.json();
+    const jsonFiles = files.filter(f => f.name.endsWith('.json'));
+
+    if (jsonFiles.length === 0) return;
+
+    const list = document.getElementById('up-tour-list');
+    list.innerHTML = '';
+    jsonFiles.forEach(f => {
+      const name = f.name.replace('.json','');
+      const item = document.createElement('div');
+      item.className = 'up-tour-item';
+      item.innerHTML = `
+        <div>
+          <div class="up-tour-name">📄 ${name}</div>
+        </div>
+        <button class="up-tour-btn" onclick="loadTourFromGitHub('${name}','${authData.token}')">Editar →</button>`;
+      list.appendChild(item);
+    });
+
+    document.getElementById('up-existing').style.display = 'block';
+    document.getElementById('up-divider').style.display = 'flex';
+  } catch(e) {
+    // silencioso — se não carregar, só mostra o drop zone
+  }
+}
+
+async function loadTourFromGitHub(name, token) {
+  const list = document.getElementById('up-tour-list');
+  list.innerHTML = '<div class="up-loading">Carregando...</div>';
+
+  try {
+    const res = await fetch(`https://api.github.com/repos/leoippolito/tour-arvore/contents/${name}.json`, {
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (!res.ok) throw new Error('Não foi possível carregar o tour');
+    const data = await res.json();
+    const json = JSON.parse(atob(data.content.replace(/\n/g,'')));
+
+    screens = json.screens;
+    curScreen = 0; curStep = 0;
+    openEditor();
+    setStatus(`Tour "${name}" carregado para edição.`);
+  } catch(e) {
+    list.innerHTML = `<div class="up-loading" style="color:var(--danger)">Erro: ${e.message}</div>`;
+  }
 }
 
 function openUploadForNew() { fileExtra.click(); }
@@ -1050,6 +1246,9 @@ function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 function mkEl(tag,cls,id){const e=document.createElement(tag);if(cls)e.className=cls;if(id)e.id=id;return e}
 function setStatus(m){const el=document.getElementById('status-txt');if(el)el.textContent=m;}
 
+// Carrega tours existentes ao abrir a tela inicial
+loadExistingTours();
+
 // ── GITHUB PUBLISH ────────────────────────────────
 // ── GITHUB PUBLISH ────────────────────────────────
 function ghConfig() {
@@ -1162,10 +1361,10 @@ async function doPublish() {
     const path  = filename + '.html';
     const ghToken = authData.token;
 
-    // Encode base64
+    // Publica HTML
+    setNmStatus('Publicando tour...','running');
     const b64 = btoa(unescape(encodeURIComponent(html)));
 
-    // Verifica SHA se já existe
     let sha = null;
     const check = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
       headers: { Authorization: `token ${ghToken}`, Accept: 'application/vnd.github.v3+json' }
@@ -1187,6 +1386,32 @@ async function doPublish() {
     });
 
     if (!res.ok) throw new Error((await res.json()).message || 'Erro ao publicar');
+
+    // Salva JSON do estado do editor (para edição futura)
+    setNmStatus('Salvando estado do editor...','running');
+    const jsonPath = filename + '.json';
+    const jsonContent = JSON.stringify({ screens, version: 1 });
+    const jsonB64 = btoa(unescape(encodeURIComponent(jsonContent)));
+
+    let jsonSha = null;
+    const jsonCheck = await fetch(`https://api.github.com/repos/${repo}/contents/${jsonPath}`, {
+      headers: { Authorization: `token ${ghToken}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (jsonCheck.ok) jsonSha = (await jsonCheck.json()).sha;
+
+    await fetch(`https://api.github.com/repos/${repo}/contents/${jsonPath}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `token ${ghToken}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: jsonSha ? `Atualiza ${jsonPath}` : `Adiciona ${jsonPath}`,
+        content: jsonB64,
+        ...(jsonSha ? { sha: jsonSha } : {})
+      })
+    });
 
     const link = `https://leoippolito.github.io/tour-arvore/${filename}`;
     setNmStatus(`✅ Publicado! <a href="${link}" target="_blank" style="color:var(--accent)">${link}</a>`,'ok');
