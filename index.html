@@ -1090,7 +1090,7 @@ async function quickPublish() {
     const res = await fetch(WORKER_URL + '/list', {
       method: 'POST',
       headers: workerHeaders(),
-      body: '{}'
+      body: JSON.stringify({ route: '/list' })
     });
     const data = await res.json();
     if (data.ok && data.files && data.files.length > 0) {
@@ -1146,7 +1146,7 @@ async function doPublish() {
     const res = await fetch(WORKER_URL + '/publish', {
       method: 'POST',
       headers: workerHeaders(),
-      body: JSON.stringify({ filename, html }),
+      body: JSON.stringify({ route: '/publish', filename, html }),
     });
 
     const data = await res.json();
