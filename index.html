@@ -439,6 +439,15 @@ textarea{resize:vertical;min-height:68px;line-height:1.5}
 </div>
 
 <script>
+// ── Configuração ───────────────────────────────────
+const WORKER_URL   = 'https://arvore-tour.leonardo-d4f.workers.dev';
+const EDITOR_TOKEN = 'arvore-editor-stol9'; // mesmo valor do Secret EDITOR_TOKEN no Cloudflare
+
+// Helper: headers autenticados para o Worker
+function workerHeaders() {
+  return { 'Content-Type': 'application/json', 'X-Editor-Token': EDITOR_TOKEN };
+}
+
 // ── Estado ────────────────────────────────────────
 // screens: [{ id, src, steps:[] }]
 // step: { title, text, hl:{top,left,width,height}, dir }
@@ -537,7 +546,9 @@ function renderAll() {
 
 // ── Screen list ───────────────────────────────────
 function renderScreenList() {
-  document.getElementById('screen-list').innerHTML = screens.map((sc,i)=>`
+  const el = document.getElementById('screen-list');
+  if (!el) return;
+  el.innerHTML = screens.map((sc,i)=>`
     <div class="screen-thumb ${i===curScreen?'active':''}" onclick="selectScreen(${i})">
       <img src="${sc.src}"/>
       <div class="screen-thumb-label">
@@ -549,8 +560,10 @@ function renderScreenList() {
 
 // ── Step list ─────────────────────────────────────
 function renderStepList() {
+  const el = document.getElementById('steps-list');
+  if (!el || !screens.length) return;
   const sc = screens[curScreen];
-  document.getElementById('steps-list').innerHTML = sc.steps.map((s,i)=>`
+  el.innerHTML = sc.steps.map((s,i)=>`
     <div class="step-item ${i===curStep?'active':''}" onclick="selectStep(${i})">
       <div class="snum">${i+1}</div>
       <div class="slabel">${esc(s.title)}</div>
@@ -561,26 +574,29 @@ function renderStepList() {
 // ── Canvas ────────────────────────────────────────
 function renderCanvas() {
   if (appMode !== 'edit') return;
+  if (!screens.length) return;
   const wrap = document.getElementById('canvas-wrap');
+  if (!wrap) return;
   wrap.querySelectorAll('.hl-box,.tip-bubble,.tour-nav,.overlay').forEach(e=>e.remove());
 
   const sc = screens[curScreen];
   const img = document.getElementById('canvas-img');
+  if (!img) return;
 
-  // Sempre força a imagem certa — comparação com src pode falhar após tour
   if (!img.dataset.screen || img.dataset.screen !== String(curScreen)) {
     img.src = sc.src;
     img.dataset.screen = String(curScreen);
   }
 
-  document.getElementById('clabel').textContent = `Tela ${curScreen+1} · Passo ${curStep+1}/${sc.steps.length}`;
-  document.getElementById('clabel').classList.remove('hidden');
+  const clabel = document.getElementById('clabel');
+  const hintbar = document.getElementById('hint-bar');
+  if (clabel) { clabel.textContent = `Tela ${curScreen+1} · Passo ${curStep+1}/${sc.steps.length}`; clabel.classList.remove('hidden'); }
 
   const s = sc.steps[curStep];
   const hasHl = s.hl.width > 0;
 
   if (hasHl) {
-    document.getElementById('hint-bar').classList.add('hidden');
+    if (hintbar) hintbar.classList.add('hidden');
     const hl = mkEl('div','hl-box editable','hl-box');
     applyHlStyle(hl, s.hl);
     ['tl','tr','bl','br'].forEach(p=>{
@@ -590,7 +606,7 @@ function renderCanvas() {
     attachHlDrag(hl);
     renderBubble();
   } else {
-    document.getElementById('hint-bar').classList.remove('hidden');
+    if (hintbar) hintbar.classList.remove('hidden');
   }
 }
 
@@ -625,16 +641,22 @@ function bubblePos(s) {
 
 // ── Panel ─────────────────────────────────────────
 function renderPanel() {
+  if (!screens.length) return;
   const s = screens[curScreen].steps[curStep];
-  document.getElementById('inp-title').value = s.title;
-  document.getElementById('inp-text').value  = s.text;
+  const inpTitle = document.getElementById('inp-title');
+  const inpText  = document.getElementById('inp-text');
+  if (inpTitle) inpTitle.value = s.title;
+  if (inpText)  inpText.value  = s.text;
   document.querySelectorAll('.dir-btn').forEach(b=>b.classList.toggle('active',b.dataset.dir===s.dir));
   updateCoords();
 }
 
 function updateCoords() {
+  if (!screens.length) return;
   const h = screens[curScreen].steps[curStep].hl;
-  document.getElementById('coord-box').innerHTML =
+  const el = document.getElementById('coord-box');
+  if (!el) return;
+  el.innerHTML =
     `top:<span>${h.top.toFixed(1)}%</span> left:<span>${h.left.toFixed(1)}%</span><br>`+
     `w:<span>${h.width.toFixed(1)}%</span> h:<span>${h.height.toFixed(1)}%</span>`;
 }
@@ -653,11 +675,12 @@ function setDir(d) {
 }
 
 // ── Draw highlight ────────────────────────────────
-const wrap = document.getElementById('canvas-wrap');
-const dr   = document.getElementById('draw-rect');
-
-wrap.addEventListener('mousedown', e=>{
+// Listener delegado no document — funciona mesmo com editor oculto no início
+document.addEventListener('mousedown', e=>{
   if (appMode!=='edit') return;
+  const wrap = document.getElementById('canvas-wrap');
+  const dr   = document.getElementById('draw-rect');
+  if (!wrap || !dr) return;
   if (e.target.closest('.hl-box')||e.target.closest('.tip-bubble')) return;
   if (!(e.target===wrap||e.target.id==='canvas-img'||e.target.id==='draw-rect')) return;
   e.preventDefault();
@@ -681,6 +704,7 @@ function attachHlDrag(hl) {
 
 window.addEventListener('mousemove', e=>{
   if (!drag) return;
+  const wrap = document.getElementById('canvas-wrap');
   const r=wrap.getBoundingClientRect();
   if (drag.type==='draw') {
     const p=relPct(e);
@@ -710,8 +734,9 @@ window.addEventListener('mousemove', e=>{
 
 window.addEventListener('mouseup', e=>{
   if (!drag) return;
+  const dr = document.getElementById('draw-rect');
   if (drag.type==='draw') {
-    dr.style.display='none';
+    if (dr) dr.style.display='none';
     const p=relPct(e);
     const x=Math.min(drag.sx,p.x),y=Math.min(drag.sy,p.y);
     const w=Math.abs(p.x-drag.sx),h=Math.abs(p.y-drag.sy);
@@ -735,21 +760,18 @@ function buildTourFlat() {
 
 function setMode(m) {
   appMode=m;
+  const wrap = document.getElementById('canvas-wrap');
   document.getElementById('tab-edit').classList.toggle('active',m==='edit');
   document.getElementById('tab-tour').classList.toggle('active',m==='tour');
   document.getElementById('sidebar-screens').classList.toggle('hidden',m==='tour');
   document.getElementById('sidebar-steps').classList.toggle('hidden',m==='tour');
   document.getElementById('rpanel').classList.toggle('hidden',m==='tour');
   if (m==='edit') {
-    // Limpa tudo que o tour possa ter deixado
     wrap.querySelectorAll('.hl-box,.tip-bubble,.overlay,.tour-nav,.clabel,.hint-bar').forEach(e=>e.remove());
     document.getElementById('tour-nav-bar').classList.add('hidden');
     document.getElementById('main-area').style.padding = '';
     wrap.style.borderRadius = '';
-    // Reseta estado do tour
-    _lastSi = null;
-    tourPos = -1;
-    drag = null;
+    _lastSi = null; tourPos = -1; drag = null;
     document.getElementById('canvas-img').dataset.screen = '';
     renderAll();
   } else {
@@ -764,7 +786,14 @@ function setMode(m) {
 let _lastSi = null;
 
 function renderTourStep() {
-  wrap.querySelectorAll('.hl-box,.tip-bubble,.overlay,.clabel,.hint-bar').forEach(e=>e.remove());
+  const wrap = document.getElementById('canvas-wrap');
+  wrap.querySelectorAll('.hl-box,.tip-bubble,.overlay').forEach(e=>e.remove());
+
+  // Oculta elementos do editor (não remove — precisamos deles ao voltar)
+  const clabel  = document.getElementById('clabel');
+  const hintBar = document.getElementById('hint-bar');
+  if (clabel)  clabel.classList.add('hidden');
+  if (hintBar) hintBar.classList.add('hidden');
 
   const isIntro = tourPos===-1;
   const isEnd   = tourPos===tourFlat.length;
@@ -785,20 +814,14 @@ function renderTourStep() {
     const sc = screens[si];
     const s  = sc.steps[pi];
     const img = document.getElementById('canvas-img');
-
-    // Troca de imagem com crossfade apenas quando muda de tela
     if (si !== _lastSi) {
       img.classList.add('crossfade');
       img.src = sc.src;
       img.onanimationend = ()=>img.classList.remove('crossfade');
       _lastSi = si;
     }
-
-    // Highlight com animação
     const hl=mkEl('div','hl-box pulse anim-fade');
     applyHlStyle(hl,s.hl); wrap.appendChild(hl);
-
-    // Bubble com animação
     const pos=bubblePos(s);
     const tip=mkEl('div','tip-bubble dir-'+s.dir+' anim-in');
     tip.style.cssText=`top:${pos.tipTop}%;left:${pos.tipLeft}%;width:${pos.width}%`;
@@ -806,7 +829,6 @@ function renderTourStep() {
     wrap.appendChild(tip);
   }
 
-  // Barra de navegação — fora do canvas
   const navBar = document.getElementById('tour-nav-bar');
   navBar.classList.remove('hidden');
   const dots=tourFlat.map((_,i)=>`<div class="t-dot ${i===tourPos?'active':''}" onclick="tourGoto(${i})"></div>`).join('');
@@ -869,13 +891,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .tb.dir-below::before{top:-16px;left:18px;border-bottom-color:#1A4B5A}
 .tb.dir-left::before{right:-16px;top:14px;border-left-color:#1A4B5A}
 .tb.dir-right::before{left:-16px;top:14px;border-right-color:#1A4B5A}
-.ov{position:absolute;inset:0;background:rgba(13,31,39,.9);display:flex;align-items:center;justify-content:center;z-index:50;animation:fadeIn .25s ease}
-.oi{background:#132330;border-radius:14px;padding:30px 26px;max-width:320px;text-align:center;border:1px solid rgba(125,212,184,.2);box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.ov{position:absolute;inset:0;background:rgba(13,31,39,.92);display:flex;align-items:center;justify-content:center;z-index:50;animation:fadeIn .25s ease}
+.oi{background:#132330;border-radius:14px;padding:30px 26px;max-width:340px;text-align:center;border:1px solid rgba(125,212,184,.2);box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .ob{display:inline-block;background:rgba(125,212,184,.15);color:#7DD4B8;font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;margin-bottom:11px;text-transform:uppercase;letter-spacing:.06em}
 .ot{font-size:19px;font-weight:700;color:#fff;margin-bottom:9px;line-height:1.3}
 .od{font-size:12px;color:rgba(255,255,255,.7);line-height:1.65;margin-bottom:20px}
-.obtn{background:#7DD4B8;color:#1A4B5A;border:none;border-radius:8px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.obtn{background:#7DD4B8;color:#1A4B5A;border:none;border-radius:8px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;width:100%}
 .obtn:hover{background:#5DCAA5}
+.obtn:disabled{opacity:.5;cursor:default}
+.oinput{width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(125,212,184,.25);border-radius:8px;padding:10px 12px;color:#fff;font-size:13px;font-family:inherit;outline:none;margin-bottom:10px;text-align:center}
+.oinput:focus{border-color:#7DD4B8}
+.oinput::placeholder{color:rgba(255,255,255,.35)}
+.oerr{font-size:11px;color:#f87171;margin-bottom:10px;min-height:16px}
 .nav{background:#1A4B5A;padding:11px 20px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(125,212,184,.15)}
 .nd{display:flex;gap:6px;flex-wrap:wrap;max-width:280px;justify-content:center}
 .dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2);cursor:pointer;transition:all .25s}
@@ -884,6 +911,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .bp{background:rgba(125,212,184,.1);color:#7DD4B8;border:1px solid rgba(125,212,184,.3)}.bp:hover{background:rgba(125,212,184,.2)}
 .bx{background:#7DD4B8;color:#1A4B5A}.bx:hover{background:#5DCAA5}
 .bn:disabled{opacity:.25;cursor:default}
+.prog-ring{position:relative;width:64px;height:64px;margin:0 auto 14px}
+.prog-ring svg{transform:rotate(-90deg)}
+.prog-ring-pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#7DD4B8}
 .hidden{display:none!important}
 </style></head><body>
 <div class="tc">
@@ -895,10 +925,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <img id="si" src="" draggable="false"/>
     <div class="hb hidden" id="hb"></div>
     <div class="tb hidden" id="tb"></div>
-    <div class="ov hidden" id="ov">
-      <div class="oi">
-        <div class="ob" id="ob"></div><div class="ot" id="ot2"></div>
-        <div class="od" id="od"></div><button class="obtn" id="obt"></button>
+    <div class="ov" id="ov">
+      <div class="oi" id="oi">
+        <!-- conteúdo injetado via JS -->
       </div>
     </div>
   </div>
@@ -910,41 +939,91 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 <script>
 const S=[${stepsJS}];
-let c=-1,lastSrc='';
+const WORKER='${WORKER_URL}';
+let c=-1,lastSrc='',userEmail='',maxStep=-1,lastMarco=0;
+const TOUR_NAME=location.pathname.split('/').pop().replace('.html','');
+
+function renderOv(html){ document.getElementById('oi').innerHTML=html; }
+
+function showEmail(){
+  renderOv(\`
+    <div class="ob">Bem-vindo</div>
+    <div class="ot">Conheça a plataforma Árvore</div>
+    <div class="od">Para começar, informe seu e-mail corporativo.</div>
+    <input class="oinput" id="em" type="email" placeholder="seu@empresa.com.br" onkeydown="if(event.key==='Enter')submitEmail()"/>
+    <div class="oerr" id="eerr"></div>
+    <button class="obtn" onclick="submitEmail()">Começar tour →</button>
+  \`);
+  document.getElementById('ov').classList.remove('hidden');
+  setTimeout(()=>{ const i=document.getElementById('em'); if(i) i.focus(); },100);
+}
+
+async function submitEmail(){
+  const inp=document.getElementById('em');
+  const err=document.getElementById('eerr');
+  const email=inp?inp.value.trim():'';
+  if(!email||!email.includes('@')||!email.includes('.')){
+    if(err) err.textContent='Digite um e-mail válido.'; return;
+  }
+  if(err) err.textContent='';
+  userEmail=email;
+  const btn=document.querySelector('#oi .obtn');
+  if(btn){btn.disabled=true;btn.textContent='Registrando...';}
+  try{
+    await fetch(WORKER+'/register',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email,date:new Date().toISOString(),tour:TOUR_NAME,pct:0,completed:false,marco:false})
+    });
+  }catch(e){}
+  document.getElementById('ov').classList.add('hidden');
+  c=-1; next();
+}
+
 function r(){
   const n=S.length;
+  if(c>maxStep) maxStep=c;
+  const pct=Math.round(Math.max(0,maxStep+1)/n*100);
+
+  // Registra marcos de 25/50/75/100% quando atingidos pela primeira vez
+  const marco=pct>=100?100:pct>=75?75:pct>=50?50:pct>=25?25:0;
+  if(marco>0&&marco>lastMarco&&userEmail){
+    lastMarco=marco;
+    try{fetch(WORKER+'/register',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:userEmail,date:new Date().toISOString(),tour:TOUR_NAME,pct:marco,completed:marco===100,marco:true})
+    });}catch(e){}
+  }
+
   document.getElementById('pf').style.width=(c<0?0:((c+1)/n*100))+'%';
   document.getElementById('pl').textContent=c<0?'':((c+1)+'/'+n);
   const hb=document.getElementById('hb'),tb=document.getElementById('tb'),ov=document.getElementById('ov');
-  const isI=c===-1,isE=c===n;
-  if(isI||isE){
+  const isE=c===n;
+  if(isE){
     hb.classList.add('hidden');tb.classList.add('hidden');ov.classList.remove('hidden');
-    ov.classList.remove('hidden'); void ov.offsetWidth; ov.style.animation='none'; void ov.offsetWidth; ov.style.animation='';
-    document.getElementById('ob').textContent=isI?'Bem-vindo':'Fim do tour';
-    document.getElementById('ot2').textContent=isI?'Conheça a plataforma':'Pronto para começar?';
-    document.getElementById('od').textContent=isI?'Uma plataforma completa de leitura e aprendizagem que engaja alunos, apoia educadores e transforma escolas em comunidades de leitores.':'Você conheceu os principais recursos. Agora é hora de colocar em prática!';
-    const b=document.getElementById('obt');b.textContent=isI?'Começar →':'Fechar';b.onclick=isI?next:()=>ov.classList.add('hidden');
+    renderOv(\`
+      <div class="ob">Obrigado!</div>
+      <div class="ot">Você concluiu a visita guiada</div>
+      <div class="od">Esperamos que tenha curtido conhecer a plataforma Árvore. Em breve alguém do nosso time pode entrar em contato com você.</div>
+      <button class="obtn" onclick="document.getElementById('ov').classList.add('hidden')">Ver novamente</button>
+    \`);
   }else{
     ov.classList.add('hidden');
     const s=S[c];
     const img=document.getElementById('si');
     if(s.src!==lastSrc){img.classList.remove('img-anim');void img.offsetWidth;img.classList.add('img-anim');img.src=s.src;lastSrc=s.src;}
-    // HL
     const nh=hb.cloneNode();nh.id='hb';nh.className='hb';nh.style.cssText='top:'+s.hl.top+';left:'+s.hl.left+';width:'+s.hl.width+';height:'+s.hl.height;
     hb.replaceWith(nh);
-    // TIP
     const nt=tb.cloneNode();nt.id='tb';nt.className='tb dir-'+s.dir;nt.style.cssText='top:'+s.tt.top+';left:'+s.tt.left+';width:'+s.tt.width;
     nt.innerHTML='<strong>'+s.title+'</strong><p>'+s.text+'</p>';
     tb.replaceWith(nt);
   }
-  document.getElementById('bp').disabled=c<=-1;
+  document.getElementById('bp').disabled=c<=0;
   document.getElementById('bn').textContent=c===n-1?'Concluir ✓':'Próximo →';
   document.getElementById('nd').innerHTML=S.map((_,i)=>'<div class="dot'+(i===c?' active':'')+'" onclick="g('+i+')"></div>').join('');
 }
 function next(){if(c<S.length)c++;r();}
-function prev(){if(c>-1)c--;r();}
+function prev(){if(c>0)c--;r();}
 function g(i){c=i;r();}
-r();
+showEmail();
 <\/script></body></html>`;
   return out;
 }
@@ -961,6 +1040,7 @@ function exportTour() {
 
 // ── Utils ─────────────────────────────────────────
 function relPct(e){
+  const wrap=document.getElementById('canvas-wrap');
   const r=wrap.getBoundingClientRect();
   return{x:+Math.max(0,Math.min(100,(e.clientX-r.left)/r.width*100)).toFixed(1),
          y:+Math.max(0,Math.min(100,(e.clientY-r.top)/r.height*100)).toFixed(1)};
@@ -968,7 +1048,7 @@ function relPct(e){
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function mkEl(tag,cls,id){const e=document.createElement(tag);if(cls)e.className=cls;if(id)e.id=id;return e}
-function setStatus(m){document.getElementById('status-txt').textContent=m}
+function setStatus(m){const el=document.getElementById('status-txt');if(el)el.textContent=m;}
 
 // ── GITHUB PUBLISH ────────────────────────────────
 // ── GITHUB PUBLISH ────────────────────────────────
@@ -1009,7 +1089,7 @@ async function quickPublish() {
   try {
     const res = await fetch(WORKER_URL + '/list', {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      headers: workerHeaders(),
       body: '{}'
     });
     const data = await res.json();
@@ -1065,7 +1145,7 @@ async function doPublish() {
     const html = buildTourHTML();
     const res = await fetch(WORKER_URL + '/publish', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: workerHeaders(),
       body: JSON.stringify({ filename, html }),
     });
 
@@ -1206,11 +1286,9 @@ Decida você mesmo quantos passos são necessários para cobrir bem a interface 
 
   try {
     // URL do seu Cloudflare Worker — troque pelo seu após criar
-    const WORKER_URL = 'https://arvore-tour.leonardo-d4f.workers.dev';
-
     const res=await fetch(WORKER_URL,{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers: workerHeaders(),
       body:JSON.stringify({
         model:'claude-sonnet-4-20250514',
         max_tokens:2000,
