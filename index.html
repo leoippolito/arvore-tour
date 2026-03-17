@@ -1071,7 +1071,6 @@ function saveConfig() {
 }
 
 async function quickPublish() {
-  // Sugere nome baseado na data
   const now = new Date();
   const sugg = `tour-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
   document.getElementById('nm-filename').value = sugg;
@@ -1084,22 +1083,25 @@ async function quickPublish() {
   document.getElementById('name-modal').classList.add('open');
   setTimeout(()=>document.getElementById('nm-filename').select(), 50);
 
-  // Busca arquivos existentes via Worker
+  // Busca token e lista arquivos existentes
   setNmStatus('Buscando tours existentes...','running');
   try {
-    const res = await fetch(WORKER_URL + '/list', {
-      method: 'POST',
-      headers: workerHeaders(),
-      body: JSON.stringify({ route: '/list' })
+    const authRes = await fetch(WORKER_URL + '/auth', {
+      method: 'POST', headers: workerHeaders(), body: JSON.stringify({ route: '/auth' })
     });
-    const data = await res.json();
-    if (data.ok && data.files && data.files.length > 0) {
-      renderExistingFiles(data.files);
+    const authData = await authRes.json();
+    if (!authData.ok) { setNmStatus(''); return; }
+
+    const res = await fetch('https://api.github.com/repos/leoippolito/tour-arvore/contents/', {
+      headers: { Authorization: `token ${authData.token}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (res.ok) {
+      const files = await res.json();
+      const htmlFiles = files.filter(f=>f.name.endsWith('.html')&&f.name!=='index.html').map(f=>f.name.replace('.html',''));
+      if (htmlFiles.length > 0) renderExistingFiles(htmlFiles);
     }
     setNmStatus('');
-  } catch(e) {
-    setNmStatus('');
-  }
+  } catch(e) { setNmStatus(''); }
 }
 
 function renderExistingFiles(files) {
@@ -1139,20 +1141,55 @@ async function doPublish() {
 
   const btn = document.getElementById('nm-btn');
   btn.disabled = true;
-  setNmStatus('Publicando...','running');
+  setNmStatus('Gerando HTML...','running');
 
   try {
     const html = buildTourHTML();
-    const res = await fetch(WORKER_URL + '/publish', {
+
+    // Valida token com o Worker antes de publicar
+    setNmStatus('Verificando autorização...','running');
+    const authRes = await fetch(WORKER_URL + '/auth', {
       method: 'POST',
       headers: workerHeaders(),
-      body: JSON.stringify({ route: '/publish', filename, html }),
+      body: JSON.stringify({ route: '/auth' }),
+    });
+    const authData = await authRes.json();
+    if (!authData.ok) throw new Error('Não autorizado');
+
+    // Publica direto no GitHub com o token retornado
+    setNmStatus('Publicando no GitHub...','running');
+    const repo  = 'leoippolito/tour-arvore';
+    const path  = filename + '.html';
+    const ghToken = authData.token;
+
+    // Encode base64
+    const b64 = btoa(unescape(encodeURIComponent(html)));
+
+    // Verifica SHA se já existe
+    let sha = null;
+    const check = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+      headers: { Authorization: `token ${ghToken}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (check.ok) sha = (await check.json()).sha;
+
+    const res = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `token ${ghToken}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: sha ? `Atualiza ${path}` : `Adiciona ${path}`,
+        content: b64,
+        ...(sha ? { sha } : {})
+      })
     });
 
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'Erro ao publicar');
+    if (!res.ok) throw new Error((await res.json()).message || 'Erro ao publicar');
 
-    setNmStatus(`✅ Publicado! <a href="${data.link}" target="_blank" style="color:var(--accent)">${data.link}</a>`,'ok');
+    const link = `https://leoippolito.github.io/tour-arvore/${filename}`;
+    setNmStatus(`✅ Publicado! <a href="${link}" target="_blank" style="color:var(--accent)">${link}</a>`,'ok');
     btn.textContent = '✅ Publicado!';
 
   } catch(err) {
