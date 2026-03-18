@@ -2480,7 +2480,7 @@ Decida você mesmo quantos passos são necessários para cobrir bem a interface 
 
     if(!res.ok){
       const errBody = await res.json().catch(()=>({}));
-      throw new Error(`Erro na API: ${res.status} — ${errBody.error || JSON.stringify(errBody)}`);
+      throw new Error(`Erro na API: ${res.status} — ${JSON.stringify(errBody)}`);
     }
     const data=await res.json();
     const raw=data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
