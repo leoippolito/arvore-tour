@@ -969,16 +969,17 @@ textarea{resize:vertical;min-height:68px;line-height:1.55}
       <button class="ai-close" onclick="closeAI()">✕</button>
     </div>
     <div class="ai-body">
-      <!-- Contexto da IA (editável) -->
-      <div class="ai-context-wrap" id="ai-context-wrap">
-        <div class="ai-context-toggle" onclick="toggleAIContext()">
-          <span>⚙️ CONTEXTO DA IA</span>
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <!-- Contexto da IA -->
+      <div class="ai-context-wrap" id="ai-context-wrap" style="margin-bottom:var(--sp-md)">
+        <div class="ai-context-toggle" style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:11px;font-weight:600;color:var(--accent);letter-spacing:.04em">🤖 USAR CONTEXTO DA ÁRVORE</span>
+          <label class="toggle" style="flex-shrink:0">
+            <input type="checkbox" id="ai-use-context" checked/>
+            <span class="toggle-slider"></span>
+          </label>
         </div>
-        <div class="ai-context-body">
-          <p class="ai-context-hint">Descreva seu produto aqui. A IA usa esse contexto em todas as gerações. Editável por qualquer pessoa que usar o editor.</p>
-          <textarea class="ai-prompt" id="ai-context" rows="5" placeholder="Ex: Somos a Árvore, uma plataforma de leitura B2B para escolas..."></textarea>
-          <button class="btn btn-g" style="margin-top:6px;font-size:11px" onclick="saveAIContext()">💾 Salvar contexto</button>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:4px">
+          Usa o documento <b>context/arvore-visao-geral.md</b> para gerar passos mais assertivos. Configure em <b>⚙️ Tour</b>.
         </div>
       </div>
 
@@ -1927,22 +1928,38 @@ async function loadContextFiles(cfg) {
 }
 
 async function fetchContextContent() {
-  const cfg = loadTourConfig();
-  if (!cfg.useContext) return '';
+  // Verifica o toggle do modal da IA (tem precedência sobre configuração salva)
+  const aiToggle = document.getElementById('ai-use-context');
+  const useCtx = aiToggle ? aiToggle.checked : loadTourConfig().useContext;
+  if (!useCtx) return '';
 
+  // Tenta buscar arquivos marcados no modal de configurações do tour
   const checkedCbs = [...document.querySelectorAll('.ctx-file-cb:checked')];
-  if (checkedCbs.length === 0) return '';
-
-  try {
-    const contents = await Promise.all(checkedCbs.map(async cb => {
-      const res = await fetch(cb.dataset.url);
-      if (!res.ok) return '';
-      return await res.text();
-    }));
-    return contents.filter(Boolean).join('\n\n---\n\n');
-  } catch(e) {
-    return '';
+  if (checkedCbs.length > 0) {
+    try {
+      const contents = await Promise.all(checkedCbs.map(async cb => {
+        const res = await fetch(cb.dataset.url);
+        if (!res.ok) return '';
+        return await res.text();
+      }));
+      return contents.filter(Boolean).join('\n\n---\n\n');
+    } catch(e) { return ''; }
   }
+
+  // Fallback: busca arvore-visao-geral.md diretamente
+  try {
+    const authRes = await fetch(WORKER_URL + '/auth', {
+      method: 'POST', headers: workerHeaders(), body: JSON.stringify({ route: '/auth' })
+    });
+    const authData = await authRes.json();
+    if (!authData.ok) return '';
+    const res = await fetch('https://api.github.com/repos/leoippolito/tour-arvore/contents/context/arvore-visao-geral.md', {
+      headers: { Authorization: `token ${authData.token}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (!res.ok) return '';
+    const data = await res.json();
+    return decodeURIComponent(escape(atob(data.content.replace(/\n/g,''))));
+  } catch(e) { return ''; }
 }
 
 function setStatus(m){const el=document.getElementById('status-txt');if(el)el.textContent=m;}
