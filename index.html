@@ -269,7 +269,7 @@ body{
 .canvas-wrap::-webkit-scrollbar-thumb{background:rgba(64,202,182,0.3);border-radius:3px}
 .canvas-wrap::-webkit-scrollbar-thumb:hover{background:rgba(64,202,182,0.6)}
 
-.canvas-wrap img{width:960px;height:auto;display:block;pointer-events:none;user-select:none;min-height:900px}
+.canvas-wrap img{width:960px;height:auto;display:block;pointer-events:none;user-select:none}
 #draw-rect{position:absolute;border:2px dashed var(--accent);background:rgba(64,202,182,0.07);pointer-events:none;display:none;z-index:50}
 .clabel{
   position:absolute;top:var(--sp-xs);left:var(--sp-xs);
@@ -1048,50 +1048,11 @@ function getCH() {
 }
 
 // ── Carrega tours existentes na tela inicial ──────
-async function loadExistingTours() {
-  try {
-    const authRes = await fetch(WORKER_URL + '/auth', {
-      method: 'POST', headers: workerHeaders(), body: JSON.stringify({ route: '/auth' })
-    });
-    const authData = await authRes.json();
-    if (!authData.ok) return;
-
-    const res = await fetch('https://api.github.com/repos/leoippolito/tour-arvore/contents/', {
-      headers: { Authorization: `token ${authData.token}`, Accept: 'application/vnd.github.v3+json' }
-    });
-    if (!res.ok) return;
-
-    const files = await res.json();
-    const htmlFiles = files.filter(f => f.name.endsWith('.html') && f.name !== 'index.html');
-
-    if (htmlFiles.length === 0) return;
-
-    // Mostra seção de tours existentes
-    document.getElementById('up-existing').style.display = 'block';
-    document.getElementById('up-divider').style.display = 'flex';
-
-    const list = document.getElementById('up-tour-list');
-    list.innerHTML = htmlFiles.map(f => {
-      const name = f.name.replace('.html','');
-      const link = `https://leoippolito.github.io/tour-arvore/${name}`;
-      return `<div class="up-tour-item">
-        <div>
-          <div class="up-tour-name">📄 ${name}</div>
-          <div class="up-tour-meta"><a href="${link}" target="_blank" style="color:var(--accent);font-size:10px">${link}</a></div>
-        </div>
-        <button class="up-tour-btn" onclick="loadExistingTour('${f.download_url}','${name}')">Editar →</button>
-      </div>`;
-    }).join('');
-
-  } catch(e) {
-    // Silencioso — se não carregar, só não mostra
-  }
-}
+// loadExistingTours definida abaixo (usa .json)
 
 async function loadExistingTour(downloadUrl, name) {
   const list = document.getElementById('up-tour-list');
   list.innerHTML = '<div class="up-loading">Carregando tour...</div>';
-
   try {
     const res = await fetch(downloadUrl);
     const html = await res.text();
@@ -1656,7 +1617,7 @@ body{font-family:'Poppins',sans-serif;background:#071218;display:flex;align-item
 .prog-lbl{font-size:10px;color:rgba(255,255,255,.5);min-width:32px;text-align:right;font-weight:600}
 .sa{position:relative;width:960px;height:900px;overflow-y:auto;overflow-x:hidden;line-height:0;scroll-behavior:smooth}
 .sa::-webkit-scrollbar{width:5px}.sa::-webkit-scrollbar-track{background:transparent}.sa::-webkit-scrollbar-thumb{background:rgba(64,202,182,0.3);border-radius:3px}
-.sa img{width:960px;height:auto;display:block;min-height:900px}
+.sa img{width:960px;height:auto;display:block}
 @keyframes cfade{from{opacity:0}to{opacity:1}}
 @keyframes hlpulse{0%,100%{box-shadow:0 0 0 3000px rgba(0,0,0,.45),0 0 0 2px rgba(64,202,182,.3)}50%{box-shadow:0 0 0 3000px rgba(0,0,0,.45),0 0 0 8px rgba(64,202,182,.08)}}
 @keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
