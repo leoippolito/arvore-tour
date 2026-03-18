@@ -256,12 +256,20 @@ body{
   padding:var(--sp-lg);background:var(--neutral-1);
 }
 .canvas-wrap{
-  position:relative;width:960px;height:600px;flex-shrink:0;
+  position:relative;width:960px;height:900px;flex-shrink:0;
   background:var(--neutral-2);border-radius:var(--radius-lg);
-  overflow:hidden;box-shadow:var(--shadow-down-xl);
+  overflow-y:auto;overflow-x:hidden;
+  box-shadow:var(--shadow-down-xl);
   border:1px solid var(--border);
+  scroll-behavior:smooth;
 }
-.canvas-wrap img{width:960px;height:600px;display:block;pointer-events:none;user-select:none}
+/* Scrollbar discreta no canvas */
+.canvas-wrap::-webkit-scrollbar{width:6px}
+.canvas-wrap::-webkit-scrollbar-track{background:transparent}
+.canvas-wrap::-webkit-scrollbar-thumb{background:rgba(64,202,182,0.3);border-radius:3px}
+.canvas-wrap::-webkit-scrollbar-thumb:hover{background:rgba(64,202,182,0.6)}
+
+.canvas-wrap img{width:960px;height:auto;display:block;pointer-events:none;user-select:none;min-height:900px}
 #draw-rect{position:absolute;border:2px dashed var(--accent);background:rgba(64,202,182,0.07);pointer-events:none;display:none;z-index:50}
 .clabel{
   position:absolute;top:var(--sp-xs);left:var(--sp-xs);
@@ -1032,7 +1040,12 @@ let appMode   = 'edit';
 let tourFlat  = []; // lista plana de {screenIdx, stepIdx} para navegação
 let tourPos   = -1;
 let drag      = null;
-const CW = 960, CH = 600;
+const CW = 960; // largura fixa
+// CH é dinâmico — usa altura real da imagem carregada
+function getCH() {
+  const img = document.getElementById('canvas-img');
+  return img && img.naturalHeight > 0 ? img.naturalHeight : 900;
+}
 
 // ── Carrega tours existentes na tela inicial ──────
 async function loadExistingTours() {
@@ -1339,12 +1352,26 @@ function renderCanvas() {
     wrap.appendChild(hl);
     attachHlDrag(hl);
     renderBubble();
+    // Scroll suave para o highlight no modo edição
+    setTimeout(() => scrollToHighlight(s.hl, wrap), 50);
   } else {
     if (hintbar) hintbar.classList.remove('hidden');
   }
 }
 
 function applyHlStyle(el,h){ el.style.cssText=`top:${h.top}%;left:${h.left}%;width:${h.width}%;height:${h.height}%`; }
+
+// Scroll suave para garantir que o highlight está visível no canvas
+function scrollToHighlight(hl, wrap) {
+  if (!wrap) return;
+  const imgH = wrap.scrollHeight;
+  const viewH = wrap.clientHeight; // 900px
+  const hlTopPx = (hl.top / 100) * imgH;
+  const hlBotPx = hlTopPx + (hl.height / 100) * imgH;
+  // Centraliza o highlight na janela visível
+  const targetScroll = hlTopPx - (viewH / 2) + ((hl.height / 100) * imgH / 2);
+  wrap.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
+}
 
 function renderBubble() {
   const wrap = document.getElementById('canvas-wrap');
@@ -1561,6 +1588,8 @@ function renderTourStep() {
     tip.style.cssText=`top:${pos.tipTop}%;left:${pos.tipLeft}%;width:${pos.width}%`;
     tip.innerHTML=`<strong>${esc(s.title)}</strong><p>${esc(s.text)}</p>`;
     wrap.appendChild(tip);
+    // Scroll suave para o highlight
+    setTimeout(() => scrollToHighlight(s.hl, wrap), 50);
   }
 
   const navBar = document.getElementById('tour-nav-bar');
@@ -1625,8 +1654,9 @@ body{font-family:'Poppins',sans-serif;background:#071218;display:flex;align-item
 .prog-bar{width:100px;height:3px;background:rgba(255,255,255,.15);border-radius:500px;overflow:hidden}
 .prog-fill{height:100%;background:#40CAB6;border-radius:500px;transition:width .4s ease}
 .prog-lbl{font-size:10px;color:rgba(255,255,255,.5);min-width:32px;text-align:right;font-weight:600}
-.sa{position:relative;width:960px;height:600px;overflow:hidden;line-height:0}
-.sa img{width:960px;height:600px;display:block}
+.sa{position:relative;width:960px;height:900px;overflow-y:auto;overflow-x:hidden;line-height:0;scroll-behavior:smooth}
+.sa::-webkit-scrollbar{width:5px}.sa::-webkit-scrollbar-track{background:transparent}.sa::-webkit-scrollbar-thumb{background:rgba(64,202,182,0.3);border-radius:3px}
+.sa img{width:960px;height:auto;display:block;min-height:900px}
 @keyframes cfade{from{opacity:0}to{opacity:1}}
 @keyframes hlpulse{0%,100%{box-shadow:0 0 0 3000px rgba(0,0,0,.45),0 0 0 2px rgba(64,202,182,.3)}50%{box-shadow:0 0 0 3000px rgba(0,0,0,.45),0 0 0 8px rgba(64,202,182,.08)}}
 @keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
@@ -1760,6 +1790,13 @@ function r(){
     const nt=tb.cloneNode();nt.id='tb';nt.className='tb dir-'+s.dir;nt.style.cssText='top:'+s.tt.top+';left:'+s.tt.left+';width:'+s.tt.width;
     nt.innerHTML='<strong>'+s.title+'</strong><p>'+s.text+'</p>';
     tb.replaceWith(nt);
+    // Scroll automático para o highlight
+    const sa=document.getElementById('sa');
+    const imgH=sa.scrollHeight;
+    const hlTopPx=parseFloat(s.hl.top)/100*imgH;
+    const hlH=parseFloat(s.hl.height)/100*imgH;
+    const target=hlTopPx-(sa.clientHeight/2)+(hlH/2);
+    sa.scrollTo({top:Math.max(0,target),behavior:'smooth'});
   }
   document.getElementById('bp').disabled=c<=0;
   document.getElementById('bn').textContent=c===n-1?'Concluir ✓':'Próximo →';
@@ -1786,9 +1823,15 @@ function exportTour() {
 // ── Utils ─────────────────────────────────────────
 function relPct(e){
   const wrap=document.getElementById('canvas-wrap');
+  const img=document.getElementById('canvas-img');
   const r=wrap.getBoundingClientRect();
-  return{x:+Math.max(0,Math.min(100,(e.clientX-r.left)/r.width*100)).toFixed(1),
-         y:+Math.max(0,Math.min(100,(e.clientY-r.top)/r.height*100)).toFixed(1)};
+  const imgH = img && img.naturalHeight > 0 ? img.naturalHeight : wrap.scrollHeight;
+  const scrollTop = wrap.scrollTop;
+  // X relativo à largura do canvas
+  const x = +Math.max(0,Math.min(100,(e.clientX-r.left)/CW*100)).toFixed(1);
+  // Y relativo à altura TOTAL da imagem (incluindo parte rolada)
+  const y = +Math.max(0,Math.min(100,((e.clientY-r.top+scrollTop)/imgH*100))).toFixed(1);
+  return {x, y};
 }
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
@@ -2356,8 +2399,9 @@ async function runAI() {
   btn.disabled=true;
   setAIStatus('Carregando contexto...','running');
 
-  // Busca contexto do GitHub se habilitado
-  const githubContext = await fetchContextContent();
+  // Busca contexto do GitHub se habilitado — falha silenciosa
+  let githubContext = '';
+  try { githubContext = await fetchContextContent(); } catch(e) {}
 
   setAIStatus('Analisando a imagem...','running');
   document.getElementById('ai-results').style.display='none';
@@ -2414,7 +2458,10 @@ Decida você mesmo quantos passos são necessários para cobrir bem a interface 
       })
     });
 
-    if(!res.ok){ throw new Error('Erro na API: '+res.status); }
+    if(!res.ok){
+      const errBody = await res.json().catch(()=>({}));
+      throw new Error(`Erro na API: ${res.status} — ${errBody.error || JSON.stringify(errBody)}`);
+    }
     const data=await res.json();
     const raw=data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
 
