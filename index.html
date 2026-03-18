@@ -261,8 +261,9 @@ body{
   overflow-y:auto;overflow-x:hidden;
   box-shadow:var(--shadow-down-xl);
   border:1px solid var(--border);
-  scroll-behavior:smooth;
 }
+/* canvas-inner: acompanha altura da imagem — top/left % relativos à imagem */
+.canvas-inner{position:relative;width:960px;}
 /* Scrollbar discreta no canvas */
 .canvas-wrap::-webkit-scrollbar{width:6px}
 .canvas-wrap::-webkit-scrollbar-track{background:transparent}
@@ -726,10 +727,12 @@ textarea{resize:vertical;min-height:68px;line-height:1.55}
   <div class="main" id="main-area">
     <div id="tour-container" style="display:flex;flex-direction:column;align-items:center;gap:0">
       <div class="canvas-wrap" id="canvas-wrap">
-        <img id="canvas-img" src="" draggable="false"/>
-        <div id="draw-rect"></div>
-        <div class="clabel" id="clabel">Passo 1</div>
-        <div class="hint-bar" id="hint-bar">Arraste na imagem para <b>criar um destaque</b></div>
+        <div class="canvas-inner" id="canvas-inner">
+          <img id="canvas-img" src="" draggable="false"/>
+          <div id="draw-rect"></div>
+          <div class="clabel" id="clabel">Passo 1</div>
+          <div class="hint-bar" id="hint-bar">Arraste na imagem para <b>criar um destaque</b></div>
+        </div>
       </div>
       <div id="tour-nav-bar" class="hidden"></div>
     </div>
@@ -1040,11 +1043,19 @@ let appMode   = 'edit';
 let tourFlat  = []; // lista plana de {screenIdx, stepIdx} para navegação
 let tourPos   = -1;
 let drag      = null;
-const CW = 960; // largura fixa
-// CH é dinâmico — usa altura real da imagem carregada
-function getCH() {
+const CW = 960;
+// Cache de dimensões da imagem atual
+let _imgCache = { w: 0, h: 0 };
+
+function getRenderedH() {
+  if (_imgCache.w > 0) return _imgCache.h * (CW / _imgCache.w);
   const img = document.getElementById('canvas-img');
-  return img && img.naturalHeight > 0 ? img.naturalHeight : 900;
+  if (img && img.naturalWidth > 0) {
+    _imgCache = { w: img.naturalWidth, h: img.naturalHeight };
+    return img.naturalHeight * (CW / img.naturalWidth);
+  }
+  if (img && img.offsetHeight > 900) return img.offsetHeight;
+  return 900;
 }
 
 // ── Carrega tours existentes na tela inicial ──────
@@ -1123,6 +1134,7 @@ function loadFirstImage(file) {
   r.onload = ev => {
     screens = [{ id: uid(), src: ev.target.result, steps: [mkStep(1)] }];
     curScreen = 0; curStep = 0;
+    _imgCache = { w: 0, h: 0 }; // reseta cache
     openEditor();
     setStatus('Tela adicionada. Arraste para criar o primeiro destaque.');
   };
@@ -1212,7 +1224,7 @@ function addScreen(file) {
 }
 
 function mkStep(n) {
-  return { title:'Passo '+n, text:'Descreva o que essa área faz.', hl:{top:10,left:10,width:35,height:10}, dir:'below' };
+  return { title:'Passo '+n, text:'Descreva o que essa área faz.', hl:{top:10,left:10,width:35,height:5}, dir:'below' };
 }
 function uid() { return Math.random().toString(36).slice(2,8); }
 
@@ -1285,15 +1297,24 @@ function renderCanvas() {
   if (!screens.length) return;
   const wrap = document.getElementById('canvas-wrap');
   if (!wrap) return;
-  wrap.querySelectorAll('.hl-box,.tip-bubble,.tour-nav,.overlay').forEach(e=>e.remove());
+  const inner = document.getElementById('canvas-inner') || wrap;
+  inner.querySelectorAll('.hl-box,.tip-bubble,.tour-nav,.overlay').forEach(e=>e.remove());
 
   const sc = screens[curScreen];
   const img = document.getElementById('canvas-img');
   if (!img) return;
 
   if (!img.dataset.screen || img.dataset.screen !== String(curScreen)) {
+    _imgCache = { w: 0, h: 0 };
+    img.onload = () => {
+      _imgCache = { w: img.naturalWidth, h: img.naturalHeight };
+      console.log('Cache populado:', _imgCache, '→ renderedH:', _imgCache.h * (CW / _imgCache.w));
+    };
     img.src = sc.src;
     img.dataset.screen = String(curScreen);
+  } else if (img.naturalWidth > 0 && _imgCache.w === 0) {
+    // Imagem já carregada mas cache vazio — popula agora
+    _imgCache = { w: img.naturalWidth, h: img.naturalHeight };
   }
 
   const clabel = document.getElementById('clabel');
@@ -1305,12 +1326,13 @@ function renderCanvas() {
 
   if (hasHl) {
     if (hintbar) hintbar.classList.add('hidden');
+    const inner = document.getElementById('canvas-inner') || wrap;
     const hl = mkEl('div','hl-box editable','hl-box');
     applyHlStyle(hl, s.hl);
     ['tl','tr','bl','br'].forEach(p=>{
       const h=mkEl('div','rh '+p); h.dataset.handle=p; hl.appendChild(h);
     });
-    wrap.appendChild(hl);
+    inner.appendChild(hl);
     attachHlDrag(hl);
     renderBubble();
     // Scroll suave para o highlight no modo edição
@@ -1325,38 +1347,40 @@ function applyHlStyle(el,h){ el.style.cssText=`top:${h.top}%;left:${h.left}%;wid
 // Scroll suave para garantir que o highlight está visível no canvas
 function scrollToHighlight(hl, wrap) {
   if (!wrap) return;
-  const imgH = wrap.scrollHeight;
-  const viewH = wrap.clientHeight; // 900px
-  const hlTopPx = (hl.top / 100) * imgH;
-  const hlBotPx = hlTopPx + (hl.height / 100) * imgH;
-  // Centraliza o highlight na janela visível
-  const targetScroll = hlTopPx - (viewH / 2) + ((hl.height / 100) * imgH / 2);
-  wrap.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
+  const inner = document.getElementById('canvas-inner');
+  const innerH = inner ? inner.getBoundingClientRect().height : wrap.scrollHeight;
+  const viewH = wrap.clientHeight;
+  const hlTopPx = (hl.top / 100) * innerH;
+  const hlH    = (hl.height / 100) * innerH;
+  const target = hlTopPx - (viewH / 2) + (hlH / 2);
+  wrap.scrollTop = Math.max(0, target);
 }
 
 function renderBubble() {
-  const wrap = document.getElementById('canvas-wrap');
-  wrap.querySelectorAll('.tip-bubble').forEach(e=>e.remove());
+  const inner = document.getElementById('canvas-inner') || document.getElementById('canvas-wrap');
+  inner.querySelectorAll('.tip-bubble').forEach(e=>e.remove());
   const s = screens[curScreen].steps[curStep];
   const pos = bubblePos(s);
   const tip = mkEl('div','tip-bubble dir-'+s.dir);
   tip.style.cssText = `top:${pos.tipTop}%;left:${pos.tipLeft}%;width:${pos.width}%`;
   tip.innerHTML = `<strong>${esc(s.title)}</strong><p>${esc(s.text)}</p>`;
-  wrap.appendChild(tip);
+  inner.appendChild(tip);
 }
 
 function bubblePos(s) {
   const h=s.hl, dir=s.dir;
-  const BW=23, GAP=2;
-  // Para 'above': posiciona o balão com bastante espaço acima — cresce naturalmente para cima
-  // Para 'below': posiciona logo abaixo do destaque
-  const BH_ABOVE = 22; // reserva generosa para cima (o balão cresce dentro desse espaço)
+  const BW=23, GAP=1.5;
+  const wrap = document.getElementById('canvas-wrap');
+  const img = wrap ? wrap.querySelector('img') : null;
+  const imgH = getRenderedH();
+  // Balão acima: ~80px de altura estimada convertido em %
+  const BH_ABOVE = (80 / imgH) * 100;
   let bt,bl;
   if      (dir==='above'){bt=h.top-BH_ABOVE-GAP; bl=h.left}
   else if (dir==='below'){bt=h.top+h.height+GAP;  bl=h.left}
   else if (dir==='left') {bt=h.top; bl=h.left-BW-GAP}
   else                   {bt=h.top; bl=h.left+h.width+GAP}
-  bt=Math.max(0.5,Math.min(bt,90));
+  bt=Math.max(-20,Math.min(bt,99));
   bl=Math.max(0.5,Math.min(bl,100-BW-0.5));
   return {tipTop:bt,tipLeft:bl,width:BW};
 }
@@ -1406,8 +1430,11 @@ document.addEventListener('mousedown', e=>{
   if (e.target.closest('.hl-box')||e.target.closest('.tip-bubble')) return;
   if (!(e.target===wrap||e.target.id==='canvas-img'||e.target.id==='draw-rect')) return;
   e.preventDefault();
+  // Força cache antes de qualquer cálculo de posição
+  const img = document.getElementById('canvas-img');
+  if (img && img.naturalWidth > 0) _imgCache = { w: img.naturalWidth, h: img.naturalHeight };
   const p=relPct(e);
-  drag={type:'draw',sx:p.x,sy:p.y};
+  drag={type:'draw', renderedH: getRenderedH(), sx:p.x,sy:p.y};
   dr.style.cssText=`display:block;left:${p.x}%;top:${p.y}%;width:0;height:0`;
 });
 
@@ -1415,41 +1442,72 @@ function attachHlDrag(hl) {
   hl.addEventListener('mousedown', e=>{
     if (appMode!=='edit') return;
     e.preventDefault(); e.stopPropagation();
-    const s=screens[curScreen].steps[curStep].hl;
+    const inner = document.getElementById('canvas-inner');
+    const r = inner.getBoundingClientRect();
+    const s = screens[curScreen].steps[curStep].hl;
+    const absX = (e.clientX - r.left) / r.width  * 100;
+    const absY = (e.clientY - r.top)  / r.height * 100;
     if (e.target.classList.contains('rh')) {
-      drag={type:'resize',handle:e.target.dataset.handle,sx:e.clientX,sy:e.clientY,ot:s.top,ol:s.left,ow:s.width,oh:s.height};
+      drag={type:'resize', handle:e.target.dataset.handle,
+            startAbsX:absX, startAbsY:absY,
+            ot:s.top, ol:s.left, ow:s.width, oh:s.height};
     } else {
-      drag={type:'move',sx:e.clientX,sy:e.clientY,ot:s.top,ol:s.left};
+      drag={type:'move',
+            startAbsX:absX, startAbsY:absY,
+            startTop:s.top, startLeft:s.left};
     }
   });
 }
 
 window.addEventListener('mousemove', e=>{
   if (!drag) return;
-  const wrap = document.getElementById('canvas-wrap');
-  const r=wrap.getBoundingClientRect();
+  const wrap  = document.getElementById('canvas-wrap');
+  const inner = document.getElementById('canvas-inner');
+  if (!inner) return;
+  const wr = wrap.getBoundingClientRect();
+  const ir = inner.getBoundingClientRect(); // inclui scroll automaticamente
+
+  // Auto-scroll na borda do canvas
+  if (drag.type==='move'||drag.type==='resize'||drag.type==='draw') {
+    const ZONE=60, SPEED=8;
+    const dBot = wr.bottom - e.clientY;
+    const dTop = e.clientY  - wr.top;
+    if (dBot < ZONE && dBot > 0) wrap.scrollTop += SPEED*(1-dBot/ZONE);
+    else if (dTop < ZONE && dTop > 0) wrap.scrollTop -= SPEED*(1-dTop/ZONE);
+  }
+
+  // Posição atual do mouse em % do canvas-inner (a.k.a. da imagem)
+  const curX = (e.clientX - ir.left) / ir.width  * 100;
+  const curY = (e.clientY - ir.top)  / ir.height * 100;
+
   if (drag.type==='draw') {
-    const p=relPct(e);
-    const x=Math.min(drag.sx,p.x),y=Math.min(drag.sy,p.y);
-    const w=Math.abs(p.x-drag.sx),h=Math.abs(p.y-drag.sy);
-    dr.style.left=x+'%';dr.style.top=y+'%';dr.style.width=w+'%';dr.style.height=h+'%';
+    const dr = document.getElementById('draw-rect');
+    if (!dr) return;
+    const p = relPct(e);
+    const x=Math.min(drag.sx,p.x), y=Math.min(drag.sy,p.y);
+    const w=Math.abs(p.x-drag.sx),  h=Math.abs(p.y-drag.sy);
+    dr.style.left=x+'%'; dr.style.top=y+'%'; dr.style.width=w+'%'; dr.style.height=h+'%';
+
   } else if (drag.type==='move') {
-    const dx=(e.clientX-drag.sx)/r.width*100,dy=(e.clientY-drag.sy)/r.height*100;
-    const h=screens[curScreen].steps[curStep].hl;
-    h.top =clamp(drag.ot+dy,0,100-h.height);
-    h.left=clamp(drag.ol+dx,0,100-h.width);
-    const el=document.getElementById('hl-box');
-    if(el) applyHlStyle(el,h);
+    const dx = curX - drag.startAbsX;
+    const dy = curY - drag.startAbsY;
+    const h = screens[curScreen].steps[curStep].hl;
+    h.top  = clamp(drag.startTop  + dy, 0, 99);
+    h.left = clamp(drag.startLeft + dx, 0, 99);
+    const el = document.getElementById('hl-box');
+    if (el) applyHlStyle(el, h);
     updateCoords(); renderBubble();
+
   } else if (drag.type==='resize') {
-    const dx=(e.clientX-drag.sx)/r.width*100,dy=(e.clientY-drag.sy)/r.height*100;
-    const s=screens[curScreen].steps[curStep].hl,hnd=drag.handle;
+    const dx = curX - drag.startAbsX;
+    const dy = curY - drag.startAbsY;
+    const s = screens[curScreen].steps[curStep].hl, hnd = drag.handle;
     if      (hnd==='br'){s.width=Math.max(3,drag.ow+dx);s.height=Math.max(2,drag.oh+dy)}
     else if (hnd==='bl'){const nw=Math.max(3,drag.ow-dx);s.left=clamp(drag.ol+drag.ow-nw,0,99);s.width=nw;s.height=Math.max(2,drag.oh+dy)}
     else if (hnd==='tr'){s.width=Math.max(3,drag.ow+dx);const nh=Math.max(2,drag.oh-dy);s.top=clamp(drag.ot+drag.oh-nh,0,99);s.height=nh}
     else if (hnd==='tl'){const nw=Math.max(3,drag.ow-dx);s.left=clamp(drag.ol+drag.ow-nw,0,99);s.width=nw;const nh=Math.max(2,drag.oh-dy);s.top=clamp(drag.ot+drag.oh-nh,0,99);s.height=nh}
-    const el=document.getElementById('hl-box');
-    if(el) applyHlStyle(el,s);
+    const el = document.getElementById('hl-box');
+    if (el) applyHlStyle(el, s);
     updateCoords(); renderBubble();
   }
 });
@@ -1459,6 +1517,9 @@ window.addEventListener('mouseup', e=>{
   const dr = document.getElementById('draw-rect');
   if (drag.type==='draw') {
     if (dr) dr.style.display='none';
+    // Força cache antes de calcular posição final
+    const imgUp = document.getElementById('canvas-img');
+    if (imgUp && imgUp.naturalWidth > 0) _imgCache = { w: imgUp.naturalWidth, h: imgUp.naturalHeight };
     const p=relPct(e);
     const x=Math.min(drag.sx,p.x),y=Math.min(drag.sy,p.y);
     const w=Math.abs(p.x-drag.sx),h=Math.abs(p.y-drag.sy);
@@ -1489,7 +1550,8 @@ function setMode(m) {
   document.getElementById('sidebar-steps').classList.toggle('hidden',m==='tour');
   document.getElementById('rpanel').classList.toggle('hidden',m==='tour');
   if (m==='edit') {
-    wrap.querySelectorAll('.hl-box,.tip-bubble,.overlay,.tour-nav,.clabel,.hint-bar').forEach(e=>e.remove());
+    const innerM = document.getElementById('canvas-inner') || wrap;
+    innerM.querySelectorAll('.hl-box,.tip-bubble,.overlay,.tour-nav').forEach(e=>e.remove());
     document.getElementById('tour-nav-bar').classList.add('hidden');
     document.getElementById('main-area').style.padding = '';
     wrap.style.borderRadius = '';
@@ -1530,7 +1592,7 @@ function renderTourStep() {
         :'Você conheceu os principais recursos. Agora é hora de colocar em prática!'}</div>
       <button class="ov-btn" onclick="${isIntro?'tourNext()':'setMode(\'edit\')'}">${isIntro?'Começar →':'Fechar'}</button>
     </div>`;
-    wrap.appendChild(ov);
+    (document.getElementById('canvas-inner')||wrap).appendChild(ov);
   } else {
     const {si,pi} = tourFlat[tourPos];
     const sc = screens[si];
@@ -1542,13 +1604,14 @@ function renderTourStep() {
       img.onanimationend = ()=>img.classList.remove('crossfade');
       _lastSi = si;
     }
+    const innerT = document.getElementById('canvas-inner') || wrap;
     const hl=mkEl('div','hl-box pulse anim-fade');
-    applyHlStyle(hl,s.hl); wrap.appendChild(hl);
+    applyHlStyle(hl,s.hl); innerT.appendChild(hl);
     const pos=bubblePos(s);
     const tip=mkEl('div','tip-bubble dir-'+s.dir+' anim-in');
     tip.style.cssText=`top:${pos.tipTop}%;left:${pos.tipLeft}%;width:${pos.width}%`;
     tip.innerHTML=`<strong>${esc(s.title)}</strong><p>${esc(s.text)}</p>`;
-    wrap.appendChild(tip);
+    innerT.appendChild(tip);
     // Scroll suave para o highlight
     setTimeout(() => scrollToHighlight(s.hl, wrap), 50);
   }
@@ -1783,15 +1846,11 @@ function exportTour() {
 
 // ── Utils ─────────────────────────────────────────
 function relPct(e){
-  const wrap=document.getElementById('canvas-wrap');
-  const img=document.getElementById('canvas-img');
-  const r=wrap.getBoundingClientRect();
-  const imgH = img && img.naturalHeight > 0 ? img.naturalHeight : wrap.scrollHeight;
-  const scrollTop = wrap.scrollTop;
-  // X relativo à largura do canvas
-  const x = +Math.max(0,Math.min(100,(e.clientX-r.left)/CW*100)).toFixed(1);
-  // Y relativo à altura TOTAL da imagem (incluindo parte rolada)
-  const y = +Math.max(0,Math.min(100,((e.clientY-r.top+scrollTop)/imgH*100))).toFixed(1);
+  const inner = document.getElementById('canvas-inner');
+  if (!inner) return {x:0, y:0};
+  const r = inner.getBoundingClientRect();
+  const x = +Math.max(0, Math.min(100, (e.clientX - r.left) / r.width  * 100)).toFixed(1);
+  const y = +Math.max(0, Math.min(100, (e.clientY - r.top)  / r.height * 100)).toFixed(1);
   return {x, y};
 }
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
