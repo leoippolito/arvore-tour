@@ -2318,9 +2318,6 @@ function openAI() {
   document.getElementById('ai-result-list').innerHTML = '';
   document.getElementById('ai-file').value = '';
 
-  // Carrega contexto salvo
-  document.getElementById('ai-context').value = loadAIContext();
-
   // Se já tem tela carregada, usa ela automaticamente
   if (screens.length > 0) {
     aiImageB64 = screens[curScreen].src;
